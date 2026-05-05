@@ -89,9 +89,14 @@ Page({
       this._provisionTimer = null
     }
     if (result.success) {
+      // 从 BLE 设备名 "Device-AABBCC" 提取末 6 位（MAC 后三字节）
+      const nameParts = this.data.deviceName.split('-')
+      const macSuffix = nameParts.length > 1 ? nameParts[nameParts.length - 1] : ''
+
       getApp().globalData.provisioningDevice = {
         deviceId:   this.data.deviceId,
         deviceName: this.data.deviceName,
+        macSuffix,                          // success 页用来查找并绑定设备
       }
       this._cleanup()
       wx.redirectTo({ url: '/pages/success/success' })

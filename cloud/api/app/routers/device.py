@@ -1,6 +1,7 @@
 import logging
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,41 @@ from app.services.ws_manager import manager
 
 router = APIRouter(prefix="/api/device", tags=["device"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/lookup")
+async def lookup_device(
+    mac_suffix: str = Query(..., min_length=6, max_length=6,
+                            description="BLE 设备名后缀，如 Device-AABBCC 中的 AABBCC"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    配网成功后，小程序用 BLE 设备名后六位（MAC 末三字节）查找刚上线的设备。
+    只返回 5 分钟内有上线记录的设备，避免误匹配历史设备。
+    """
+    s = mac_suffix.upper()
+    mac_pattern = f"%:{s[0:2]}:{s[2:4]}:{s[4:6]}"
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+    result = await db.execute(
+        select(Device).where(
+            Device.mac.like(mac_pattern),
+            Device.last_seen_at >= cutoff,
+        )
+    )
+    device = result.scalar_one_or_none()
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Device not yet online. Please wait a moment.")
+
+    return {
+        "id":         device.id,
+        "mac":        device.mac,
+        "board_type": device.board_type,
+        "is_bound":   device.user_id is not None,
+        "is_online":  await is_device_online(device.mac),
+    }
 
 
 @router.post("/bind")

@@ -1,45 +1,53 @@
 <view class="container">
 
-  <!-- 顶部说明 -->
+  <!-- 顶部 -->
   <view class="header">
-    <view class="header-icon">📡</view>
-    <text class="header-title">添加新设备</text>
-    <text class="header-sub">请确保设备已上电，保持手机蓝牙开启</text>
+    <text class="header-title">我的设备</text>
+    <view class="btn-add" bindtap="onAddDevice">+</view>
   </view>
 
-  <!-- 扫描状态 -->
-  <view class="scan-bar">
-    <view class="scan-dot {{scanning ? 'scanning' : ''}}"></view>
-    <text class="scan-text">{{scanning ? '正在搜索附近设备...' : '搜索已停止'}}</text>
-    <button class="btn-rescan" bindtap="onRescan" wx:if="{{!scanning}}">重新搜索</button>
+  <!-- 加载中 -->
+  <view class="loading" wx:if="{{loading}}">
+    <text class="loading-text">加载中...</text>
   </view>
 
   <!-- 设备列表 -->
-  <view class="device-list" wx:if="{{devices.length > 0}}">
+  <scroll-view
+    wx:elif="{{devices.length > 0}}"
+    scroll-y
+    refresher-enabled
+    refresher-triggered="{{refreshing}}"
+    bindrefresherrefresh="onRefresh"
+    class="device-list"
+  >
     <view
-      class="device-item"
+      class="device-card"
       wx:for="{{devices}}"
-      wx:key="deviceId"
-      bindtap="onSelectDevice"
+      wx:key="id"
+      bindtap="onTapDevice"
       data-device="{{item}}"
     >
-      <view class="device-icon">📡</view>
-      <view class="device-info">
-        <text class="device-name">{{item.name}}</text>
-        <text class="device-rssi">信号强度 {{item.rssi}} dBm</text>
+      <view class="card-left">
+        <view class="device-icon">📦</view>
+        <view class="device-info">
+          <text class="device-name">{{item.alias || item.board_type}}</text>
+          <text class="device-type">{{item.board_type}}</text>
+        </view>
       </view>
-      <view class="device-arrow">›</view>
+      <view class="card-right">
+        <view class="status-dot {{item.is_online ? 'online' : 'offline'}}"></view>
+        <text class="status-text">{{item.is_online ? '在线' : '离线'}}</text>
+        <text class="arrow">›</text>
+      </view>
     </view>
-  </view>
+  </scroll-view>
 
   <!-- 空状态 -->
-  <view class="empty" wx:if="{{!scanning && devices.length === 0}}">
-    <text class="empty-text">未发现待配网设备</text>
-    <text class="empty-sub">请确认设备处于配网模式（上电后10分钟内）</text>
-  </view>
-
-  <view class="loading" wx:if="{{scanning && devices.length === 0}}">
-    <text class="loading-text">搜索中...</text>
+  <view class="empty" wx:elif="{{!loading}}">
+    <text class="empty-icon">📭</text>
+    <text class="empty-text">还没有设备</text>
+    <text class="empty-sub">点击右上角 + 添加第一台设备</text>
+    <button class="btn-empty-add" bindtap="onAddDevice">添加设备</button>
   </view>
 
 </view>

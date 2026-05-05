@@ -1,13 +1,37 @@
 <view class="container">
+
   <view class="check-wrap">
     <view class="check-circle">✓</view>
   </view>
   <text class="title">配网成功！</text>
-  <text class="sub">设备已连接到 WiFi 并上线</text>
-  <view class="device-info">
-    <text class="device-label">设备名称</text>
-    <text class="device-val">{{deviceName}}</text>
+  <text class="sub">{{deviceName}} 已连接 WiFi</text>
+
+  <!-- 绑定状态 -->
+  <view class="bind-card">
+    <view class="bind-row" wx:if="{{bindStatus === 'waiting'}}">
+      <view class="spin"></view>
+      <text class="bind-text">等待设备上线...</text>
+    </view>
+    <view class="bind-row" wx:elif="{{bindStatus === 'binding'}}">
+      <view class="spin"></view>
+      <text class="bind-text">正在绑定到账号...</text>
+    </view>
+    <view class="bind-row bound" wx:elif="{{bindStatus === 'bound'}}">
+      <text class="bind-icon">✓</text>
+      <text class="bind-text">已绑定到您的账号</text>
+    </view>
+    <view class="bind-row failed" wx:elif="{{bindStatus === 'failed'}}">
+      <text class="bind-icon">!</text>
+      <text class="bind-text">自动绑定超时，可在设备列表中手动绑定</text>
+    </view>
   </view>
-  <button class="btn-home" bindtap="onGoHome">返回首页</button>
-  <button class="btn-add"  bindtap="onAddMore">继续添加设备</button>
+
+  <!-- 操作按钮 -->
+  <button class="btn-primary" bindtap="onViewDevice"
+          wx:if="{{bindStatus === 'bound'}}">查看设备</button>
+  <button class="btn-primary" bindtap="onGoHome"
+          wx:elif="{{bindStatus === 'failed'}}">返回首页</button>
+
+  <button class="btn-secondary" bindtap="onAddMore">继续添加设备</button>
+
 </view>

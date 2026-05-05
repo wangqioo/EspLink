@@ -1,0 +1,35 @@
+<view class="container" wx:if="{{device}}">
+
+  <view class="header">
+    <view class="online-badge {{device.is_online ? 'online' : 'offline'}}">
+      {{device.is_online ? '在线' : '离线'}}
+    </view>
+    <text class="device-name">{{device.alias || device.board_type}}</text>
+  </view>
+
+  <view class="capabilities" wx:if="{{device.capabilities}}">
+    <text class="cap-title">设备能力</text>
+    <view class="cap-tags">
+      <text
+        class="cap-tag"
+        wx:for="{{device.capabilities.features}}"
+        wx:key="*this"
+      >{{item}}</text>
+      <text class="cap-tag empty" wx:if="{{!device.capabilities.features.length}}">通用设备</text>
+    </view>
+  </view>
+
+  <view class="actions">
+    <button
+      class="btn-action"
+      bindtap="onSendPing"
+      loading="{{sending}}"
+      disabled="{{!device.is_online}}"
+    >发送 Ping</button>
+  </view>
+
+  <view class="tip" wx:if="{{!device.is_online}}">
+    <text>设备当前离线，无法发送指令</text>
+  </view>
+
+</view>

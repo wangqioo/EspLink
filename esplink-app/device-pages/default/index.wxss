@@ -1,0 +1,28 @@
+.container { padding: 32rpx; min-height: 100vh; background: #f5f6fa; }
+
+.header { text-align: center; padding: 48rpx 0 40rpx; }
+.online-badge {
+  display: inline-block; border-radius: 32rpx;
+  padding: 8rpx 28rpx; font-size: 24rpx; margin-bottom: 20rpx;
+}
+.online-badge.online  { background: #e8f5e9; color: #2e7d32; }
+.online-badge.offline { background: #f5f5f5; color: #999; }
+.device-name { display: block; font-size: 40rpx; font-weight: 700; color: #1a1a2e; }
+
+.capabilities { background: #fff; border-radius: 20rpx; padding: 32rpx; margin-bottom: 24rpx; }
+.cap-title { font-size: 26rpx; color: #888; margin-bottom: 20rpx; display: block; }
+.cap-tags { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.cap-tag {
+  background: #e8f0fe; color: #1a73e8;
+  border-radius: 12rpx; padding: 8rpx 24rpx; font-size: 26rpx;
+}
+.cap-tag.empty { background: #f5f5f5; color: #999; }
+
+.actions { margin-top: 16rpx; }
+.btn-action {
+  width: 100%; background: #1a73e8; color: #fff;
+  border-radius: 20rpx; font-size: 32rpx; padding: 32rpx 0; border: none;
+}
+.btn-action[disabled] { background: #ccc; }
+
+.tip { text-align: center; margin-top: 24rpx; font-size: 26rpx; color: #999; }

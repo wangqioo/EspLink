@@ -1,13 +1,16 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/scan/scan",
     "pages/provision/provision",
-    "pages/success/success"
+    "pages/success/success",
+    "pages/device/device",
+    "device-pages/default/index"
   ],
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#1a1a2e",
-    "navigationBarTitleText": "设备配网",
+    "navigationBarTitleText": "EspLink",
     "navigationBarTextStyle": "white"
   },
   "style": "v2",

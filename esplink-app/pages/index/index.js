@@ -1,56 +1,44 @@
-const ble = require('../../utils/ble')
+const api = require('../../utils/api')
 
 Page({
   data: {
-    scanning: false,
-    devices:  [],
+    devices:    [],
+    loading:    true,
+    refreshing: false,
   },
-
-  _stopScan: null,
 
   onLoad() {
-    this._startScan()
+    getApp().ensureLogin().then(() => this._loadDevices())
   },
 
-  onUnload() {
-    if (this._stopScan) this._stopScan()
-    ble.closeAdapter()
+  onShow() {
+    // 每次回到首页刷新列表（配网完成返回后也会触发）
+    if (!this.data.loading) this._loadDevices()
   },
 
-  async _startScan() {
-    this.setData({ scanning: true, devices: [] })
+  async _loadDevices() {
     try {
-      await ble.openAdapter()
+      const { devices } = await api.getDeviceList()
+      this.setData({ devices, loading: false, refreshing: false })
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' })
-      this.setData({ scanning: false })
-      return
+      this.setData({ loading: false, refreshing: false })
     }
-
-    this._stopScan = ble.startScan((device) => {
-      const list = this.data.devices
-      if (list.find(d => d.deviceId === device.deviceId)) return
-      this.setData({ devices: [...list, device] })
-    })
-
-    // 15 秒后自动停止
-    setTimeout(() => {
-      this.setData({ scanning: false })
-    }, 15000)
   },
 
-  onRescan() {
-    if (this._stopScan) this._stopScan()
-    this._startScan()
+  onRefresh() {
+    this.setData({ refreshing: true })
+    this._loadDevices()
   },
 
-  onSelectDevice(e) {
+  onAddDevice() {
+    wx.navigateTo({ url: '/pages/scan/scan' })
+  },
+
+  onTapDevice(e) {
     const device = e.currentTarget.dataset.device
-    if (this._stopScan) this._stopScan()
-    this.setData({ scanning: false })
-
     wx.navigateTo({
-      url: `/pages/provision/provision?deviceId=${device.deviceId}&name=${device.name}`,
+      url: `/pages/device/device?id=${device.id}&name=${device.alias || device.board_type}`,
     })
   },
 })
