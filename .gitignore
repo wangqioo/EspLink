@@ -1,0 +1,14 @@
+# WeChat miniprogram
+esplink-app/project.private.config.json
+esplink-app/node_modules/
+
+# ESP-IDF firmware build artifacts
+esplink-firmware/build/
+esplink-firmware/managed_components/
+esplink-firmware/.cache/
+esplink-firmware/dependencies.lock
+esplink-firmware/sdkconfig.old
+
+# macOS
+.DS_Store
+**/.DS_Store

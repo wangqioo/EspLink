@@ -1,0 +1,13 @@
+<view class="container">
+  <view class="check-wrap">
+    <view class="check-circle">✓</view>
+  </view>
+  <text class="title">配网成功！</text>
+  <text class="sub">设备已连接到 WiFi 并上线</text>
+  <view class="device-info">
+    <text class="device-label">设备名称</text>
+    <text class="device-val">{{deviceName}}</text>
+  </view>
+  <button class="btn-home" bindtap="onGoHome">返回首页</button>
+  <button class="btn-add"  bindtap="onAddMore">继续添加设备</button>
+</view>

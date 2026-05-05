@@ -1,0 +1,45 @@
+<view class="container">
+
+  <!-- 顶部说明 -->
+  <view class="header">
+    <view class="header-icon">📡</view>
+    <text class="header-title">添加新设备</text>
+    <text class="header-sub">请确保设备已上电，保持手机蓝牙开启</text>
+  </view>
+
+  <!-- 扫描状态 -->
+  <view class="scan-bar">
+    <view class="scan-dot {{scanning ? 'scanning' : ''}}"></view>
+    <text class="scan-text">{{scanning ? '正在搜索附近设备...' : '搜索已停止'}}</text>
+    <button class="btn-rescan" bindtap="onRescan" wx:if="{{!scanning}}">重新搜索</button>
+  </view>
+
+  <!-- 设备列表 -->
+  <view class="device-list" wx:if="{{devices.length > 0}}">
+    <view
+      class="device-item"
+      wx:for="{{devices}}"
+      wx:key="deviceId"
+      bindtap="onSelectDevice"
+      data-device="{{item}}"
+    >
+      <view class="device-icon">📡</view>
+      <view class="device-info">
+        <text class="device-name">{{item.name}}</text>
+        <text class="device-rssi">信号强度 {{item.rssi}} dBm</text>
+      </view>
+      <view class="device-arrow">›</view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{!scanning && devices.length === 0}}">
+    <text class="empty-text">未发现待配网设备</text>
+    <text class="empty-sub">请确认设备处于配网模式（上电后10分钟内）</text>
+  </view>
+
+  <view class="loading" wx:if="{{scanning && devices.length === 0}}">
+    <text class="loading-text">搜索中...</text>
+  </view>
+
+</view>

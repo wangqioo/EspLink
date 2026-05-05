@@ -1,0 +1,76 @@
+<view class="container">
+
+  <view class="device-card">
+    <view class="device-icon">📡</view>
+    <view>
+      <text class="device-name">{{deviceName}}</text>
+      <text class="device-id">ID: {{deviceId}}</text>
+    </view>
+  </view>
+
+  <view class="steps">
+    <view class="step {{step >= 1 ? 'done' : ''}} {{step === 1 ? 'active' : ''}}">
+      <view class="step-dot">{{step > 1 ? '✓' : '1'}}</view>
+      <text>蓝牙连接</text>
+    </view>
+    <view class="step-line"></view>
+    <view class="step {{step >= 2 ? 'done' : ''}} {{step === 2 ? 'active' : ''}}">
+      <view class="step-dot">{{step > 2 ? '✓' : '2'}}</view>
+      <text>发送配网</text>
+    </view>
+    <view class="step-line"></view>
+    <view class="step">
+      <view class="step-dot">3</view>
+      <text>完成</text>
+    </view>
+  </view>
+
+  <view class="progress" wx:if="{{step === 0}}">
+    <view class="spinner"></view>
+    <text class="progress-text">正在连接设备...</text>
+  </view>
+
+  <view class="form" wx:if="{{step === 1}}">
+    <view class="form-item">
+      <text class="form-label">WiFi 名称</text>
+      <input
+        class="form-input"
+        type="text"
+        placeholder="输入WiFi名称"
+        placeholder-style="color:#bbb;"
+        bindinput="onSSIDInput"
+      />
+    </view>
+    <view class="form-item">
+      <text class="form-label">WiFi 密码</text>
+      <view class="input-wrap">
+        <input
+          class="form-input"
+          type="text"
+          placeholder="输入WiFi密码"
+          placeholder-style="color:#bbb;"
+          password="{{!showPassword}}"
+          bindinput="onPasswordInput"
+        />
+        <text class="toggle-pw" bindtap="togglePassword">{{showPassword ? '隐藏' : '显示'}}</text>
+      </view>
+    </view>
+    <button
+      class="btn-primary"
+      bindtap="onStartProvision"
+      disabled="{{!canSubmit}}"
+    >开始配网</button>
+  </view>
+
+  <view class="progress" wx:if="{{step === 2}}">
+    <view class="spinner"></view>
+    <text class="progress-text">{{statusText}}</text>
+    <text class="progress-sub">设备正在连接 WiFi，请稍候...</text>
+  </view>
+
+  <view class="error-card" wx:if="{{errorMsg}}">
+    <text class="error-text">⚠️ {{errorMsg}}</text>
+    <button class="btn-retry" bindtap="onRetry">重试</button>
+  </view>
+
+</view>

@@ -1,0 +1,24 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "app_nvs.c"
+        "app_device.c"
+        "app_blufi.c"
+        "app_wifi.c"
+        "app_ws.c"
+        "app_ota.c"
+        "app_button.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        nvs_flash
+        esp_wifi
+        esp_event
+        esp_netif
+        bt
+        esp_https_ota
+        esp_http_client
+        app_update
+        mbedtls
+        json
+        driver
+)
