@@ -113,3 +113,24 @@ esp_err_t app_ota_check_and_upgrade(const char *check_url)
     }
     return err;
 }
+
+esp_err_t app_ota_upgrade_from_url(const char *fw_url)
+{
+    ESP_LOGI(TAG, "OTA from url: %s", fw_url);
+
+    esp_https_ota_config_t ota_cfg = {
+        .http_config = &(esp_http_client_config_t){
+            .url                     = fw_url,
+            .skip_cert_common_name_check = false,
+        },
+    };
+
+    esp_err_t err = esp_https_ota(&ota_cfg);
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "OTA success, restarting");
+        esp_restart();
+    } else {
+        ESP_LOGE(TAG, "OTA failed: %s", esp_err_to_name(err));
+    }
+    return err;
+}

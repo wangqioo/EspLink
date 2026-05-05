@@ -1,5 +1,6 @@
 #include "app_ws.h"
 #include "app_device.h"
+#include "board_config.h"
 #include "esp_websocket_client.h"
 #include "esp_log.h"
 #include "cJSON.h"
@@ -19,17 +20,18 @@ static void send_hello(void)
     cJSON_AddNumberToObject(root, "version",          1);
     cJSON_AddStringToObject(root, "mac",              app_device_get_mac_str());
     cJSON_AddStringToObject(root, "sn",               app_device_get_sn());
-    cJSON_AddStringToObject(root, "firmware_version", app_device_get_firmware_version());
+    cJSON_AddStringToObject(root, "board_type",       BOARD_TYPE);
+    cJSON_AddStringToObject(root, "firmware_version", BOARD_FIRMWARE_VERSION);
 
-    cJSON *audio = cJSON_AddObjectToObject(root, "audio");
-    cJSON_AddStringToObject(audio, "format",         "opus");
-    cJSON_AddNumberToObject(audio, "sample_rate",    16000);
-    cJSON_AddNumberToObject(audio, "channels",       1);
-    cJSON_AddNumberToObject(audio, "frame_duration", 60);
+    // 设备能力描述：云端和小程序据此路由功能页
+    cJSON *caps = cJSON_Parse(BOARD_CAPABILITIES_JSON);
+    if (caps) {
+        cJSON_AddItemToObject(root, "capabilities", caps);
+    }
 
     char *str = cJSON_PrintUnformatted(root);
     esp_websocket_client_send_text(s_client, str, strlen(str), portMAX_DELAY);
-    ESP_LOGI(TAG, "sent hello");
+    ESP_LOGI(TAG, "sent hello: board=%s fw=%s", BOARD_TYPE, BOARD_FIRMWARE_VERSION);
     free(str);
     cJSON_Delete(root);
 }
