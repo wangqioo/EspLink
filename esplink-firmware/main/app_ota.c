@@ -45,7 +45,7 @@ esp_err_t app_ota_check_and_upgrade(const char *check_url)
     esp_http_client_config_t cfg = {
         .url            = check_url,
         .event_handler  = http_event_handler,
-        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .transport_type = HTTP_TRANSPORT_OVER_TCP,
         .skip_cert_common_name_check = false,
     };
 

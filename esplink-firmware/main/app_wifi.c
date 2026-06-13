@@ -1,4 +1,6 @@
 #include "app_wifi.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
@@ -12,6 +14,20 @@ static wifi_connected_cb_t    s_on_connected;
 static wifi_disconnected_cb_t s_on_disconnected;
 static int                    s_retry;
 
+static void connected_cb_task(void *arg)
+{
+    (void)arg;
+    if (s_on_connected) s_on_connected();
+    vTaskDelete(NULL);
+}
+
+static void disconnected_cb_task(void *arg)
+{
+    (void)arg;
+    if (s_on_disconnected) s_on_disconnected();
+    vTaskDelete(NULL);
+}
+
 static void wifi_event_handler(void *arg, esp_event_base_t base,
                                 int32_t id, void *data)
 {
@@ -22,13 +38,19 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
             esp_wifi_connect();
         } else {
             ESP_LOGE(TAG, "WiFi lost after %d retries", MAX_RETRY);
-            if (s_on_disconnected) s_on_disconnected();
+            if (s_on_disconnected &&
+                xTaskCreate(disconnected_cb_task, "wifi_disc_cb", 4096, NULL, 5, NULL) != pdPASS) {
+                ESP_LOGE(TAG, "failed to create disconnect callback task");
+            }
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         s_retry = 0;
         ip_event_got_ip_t *ev = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "got IP: " IPSTR, IP2STR(&ev->ip_info.ip));
-        if (s_on_connected) s_on_connected();
+        if (s_on_connected &&
+            xTaskCreate(connected_cb_task, "wifi_conn_cb", 6144, NULL, 5, NULL) != pdPASS) {
+            ESP_LOGE(TAG, "failed to create connect callback task");
+        }
     }
 }
 

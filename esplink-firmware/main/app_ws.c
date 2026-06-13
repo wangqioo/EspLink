@@ -3,15 +3,47 @@
 #include "board_config.h"
 #include "esp_websocket_client.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdio.h>
 
 #define TAG "app_ws"
+#define WS_APP_PING_INTERVAL_MS 30000
 
 static esp_websocket_client_handle_t s_client;
 static ws_callbacks_t                s_cbs;
 static bool                          s_connected;
+static TaskHandle_t                  s_ping_task;
+
+static void ping_task(void *arg)
+{
+    (void)arg;
+    while (s_client) {
+        vTaskDelay(pdMS_TO_TICKS(WS_APP_PING_INTERVAL_MS));
+        if (s_client && s_connected) {
+            esp_err_t err = app_ws_send_json("{\"type\":\"ping\"}");
+            if (err == ESP_OK) {
+                ESP_LOGD(TAG, "sent app ping");
+            } else {
+                ESP_LOGW(TAG, "app ping failed: %s", esp_err_to_name(err));
+            }
+        }
+    }
+    s_ping_task = NULL;
+    vTaskDelete(NULL);
+}
+
+static void ensure_ping_task(void)
+{
+    if (s_ping_task) return;
+    BaseType_t ok = xTaskCreate(ping_task, "ws_app_ping", 3072, NULL, 5, &s_ping_task);
+    if (ok != pdPASS) {
+        ESP_LOGE(TAG, "failed to create app ping task");
+        s_ping_task = NULL;
+    }
+}
 
 static void send_hello(void)
 {
@@ -46,6 +78,7 @@ static void ws_event_handler(void *arg, esp_event_base_t base,
         ESP_LOGI(TAG, "WebSocket connected");
         s_connected = true;
         send_hello();
+        ensure_ping_task();
         if (s_cbs.on_connected) s_cbs.on_connected();
         break;
 
@@ -87,10 +120,11 @@ esp_err_t app_ws_init(const char *url, const char *token,
 {
     memcpy(&s_cbs, cbs, sizeof(ws_callbacks_t));
     s_connected = false;
+    ESP_LOGI(TAG, "connecting to %s", url);
 
     // 拼接 Authorization header
     char auth_header[320];
-    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token);
+    snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s\r\n", token);
 
     esp_websocket_client_config_t cfg = {
         .uri                = url,
@@ -128,6 +162,7 @@ esp_err_t app_ws_send_json(const char *json)
 void app_ws_stop(void)
 {
     if (s_client) {
+        s_connected = false;
         esp_websocket_client_stop(s_client);
         esp_websocket_client_destroy(s_client);
         s_client = NULL;

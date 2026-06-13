@@ -1,4 +1,4 @@
-const BASE_URL = 'https://your-server.com'  // 换成真实服务器地址
+const BASE_URL = 'http://192.168.1.26:8088'  // 本地联调后端地址
 
 function request(method, path, data, needAuth = true) {
   return new Promise((resolve, reject) => {

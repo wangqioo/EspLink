@@ -24,7 +24,7 @@
 
 // 启动注册端点：合并了激活 + OTA 检查，设备每次上电请求一次
 // 服务端根据 board_type 和 firmware_version 决定是否下发 OTA
-#define BOOT_REGISTER_URL   "https://your-server.com/api/ota/check"
+#define BOOT_REGISTER_URL   "http://192.168.1.26:8088/api/ota/check"
 
 // ---------- 状态机 ----------
 
@@ -95,6 +95,10 @@ static void on_ws_json(const char *json)
         // 服务端确认握手，告知绑定状态（供调试用）
         ESP_LOGI(TAG, "hello_ack: is_bound=%d",
                  cJSON_IsTrue(cJSON_GetObjectItem(root, "is_bound")));
+
+    } else if (strcmp(type, "pong") == 0) {
+        // 业务心跳回复
+        ESP_LOGD(TAG, "pong");
 
     } else if (strcmp(type, "ota_push") == 0) {
         // 云端主动推送 OTA
@@ -177,7 +181,7 @@ static void boot_register_task(void *arg)
         .url            = BOOT_REGISTER_URL,
         .event_handler  = reg_http_event,
         .method         = HTTP_METHOD_POST,
-        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .transport_type = HTTP_TRANSPORT_OVER_TCP,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -264,12 +268,8 @@ static void on_wifi_connected(void)
         app_blufi_notify_wifi_result(true);
     }
 
-    if (app_nvs_has_token()) {
-        set_state(STATE_ONLINE);
-        connect_to_server();
-    } else {
-        set_state(STATE_ACTIVATING);
-    }
+    s_act_started = false;
+    set_state(STATE_ACTIVATING);
 }
 
 static void on_wifi_disconnected(void)
