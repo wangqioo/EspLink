@@ -437,6 +437,8 @@ onLoad({ deviceId }) {
 | `app_ws.c` | 90% | WebSocket 连接、send_hello、帧收发完整；audio 回调是 stub |
 | `app_button.c` | ✅ | 长按5秒恢复出厂，完整 |
 | `app_device.c` | ✅ | MAC/SN/BLE名称/固件版本，完整 |
+| `app_cube_demo.c` | ✅ | 3D cube 示例产品模块，联网注册成功后启动 LCD + QMI8658 渲染任务 |
+| `esp32_s3_szp.c` | ✅ | cube demo 使用的 ESP32-S3 LCD/QMI8658 BSP |
 
 **关键已有逻辑**（架构设计时需对齐，不要重复实现）：
 - `activate_task()` 已实现：POST 激活端点，请求带 MAC/SN/firmware_version，响应解析 `token` + `ws_url` 写 NVS → 这就是架构里的 `/api/ota/check`，只需改名对齐
@@ -526,10 +528,12 @@ uvicorn app.main:app --reload
 
 ### Phase 5 — 完善与扩展（持续迭代）
 
-- [ ] OTA 固件管理：上传、版本控制、按 `board_type` 推送
+- [x] OTA 固件管理：后端管理台支持 `.bin` 上传，自动生成 URL/SHA256/文件大小，按 `board_type` 发布
+- [x] 第一个 OTA 示例固件：`cube_3d_v1.0` 已集成到 EspLink OTA 壳，版本 `esplink-v1 / 1.0.2`
 - [ ] 设备指令下发：小程序 → 云端 API → WebSocket 网关 → 设备
 - [ ] 第二款 ESP32 产品接入，验证多产品框架闭环
 - [ ] 管理后台 Web（Vue 3）：设备统计、固件管理、用户管理
+- [ ] 测试阶段自动联网：提供非提交入库的本地 WiFi 注入方式，跳过 BLE 配网验证硬件 demo
 
 ---
 

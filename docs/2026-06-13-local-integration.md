@@ -160,11 +160,80 @@ python /Users/wq/esp-idf/tools/idf.py -p /dev/cu.usbmodem112301 build flash\""
 9. 后端返回 `hello_ack`，并将设备标记在线。
 10. 设备每 30 秒发送业务 `ping`，后端回复 `pong` 并刷新在线时间。
 
+## 2026-06-15 Cube 3D OTA Demo 验证
+
+`/Users/wq/Workshop/MCU/claude-demos/cube_3d_v1.0` 已改造成 EspLink 的 OTA 示例固件，而不是直接发布原 demo 的 `cube_3d.bin`。
+
+集成方式：
+
+- `app_cube_demo.c/.h`：3D cube 渲染任务，联网注册成功后启动。
+- `esp32_s3_szp.c/.h`：原 demo 的 LCD + QMI8658 BSP。
+- `main.c`：保留 EspLink 唯一 `app_main`，先走 WiFi、`/api/ota/check`、WebSocket，再启动产品 demo。
+- `board_config.h`：当前测试版本为 `BOARD_TYPE=esplink-v1`、`BOARD_FIRMWARE_VERSION=1.0.2`。
+
+构建验证：
+
+```bash
+cd /Users/wq/EspLink/esplink-firmware
+
+/bin/zsh -lc "source /Users/wq/esp-idf/export.sh >/tmp/idf-export-cube-build.log && \
+export PATH=/Users/wq/.espressif/python_env/idf5.5_py3.13_env/bin:/Users/wq/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin:\$PATH && \
+python /Users/wq/esp-idf/tools/idf.py build"
+```
+
+结果：
+
+- app binary size: `0x133f30`
+- OTA app partition: `0x180000`
+- free: `0x4c0d0`（约 20%）
+
+本地 OTA 发布产物：
+
+```text
+/Users/wq/EspLink/esplink-firmware/build/esplink-v1-1.0.2.bin
+```
+
+发布字段：
+
+- `board_type`: `esplink-v1`
+- `version`: `1.0.2`
+- `size_bytes`: `1261360`
+- `sha256`: `981577fe209b70f10e8c5c127cd24906ba961fba791d0f2bc472574b5cc465b4`
+
+已通过 USB 直接烧录验证启动：
+
+```bash
+cd /Users/wq/EspLink/esplink-firmware
+
+/bin/zsh -lc "source /Users/wq/esp-idf/export.sh >/tmp/idf-export-cube-flash.log && \
+export PATH=/Users/wq/.espressif/python_env/idf5.5_py3.13_env/bin:/Users/wq/.espressif/tools/xtensa-esp-elf/esp-14.2.0_20260121/xtensa-esp-elf/bin:\$PATH && \
+python /Users/wq/esp-idf/tools/idf.py -p /dev/cu.usbmodem111301 flash"
+```
+
+串口确认：
+
+```text
+main: === device boot: board=esplink-v1 fw=1.0.2 ===
+```
+
+当前硬件状态：
+
+- 设备 MAC: `10:51:db:80:e2:e8`
+- 设备未保存 WiFi 凭据时会进入 BLE 配网。
+- cube demo 当前设计为 online 后启动，所以没有 WiFi 凭据时不会显示 cube。
+
+测试阶段待办：
+
+- 增加本地测试 WiFi 注入方式，跳过 BLE 配网。
+- WiFi SSID/密码不得提交到 Git；使用本地 ignored 配置、NVS 写入工具或 menuconfig local override。
+- 配好 WiFi 后验证完整链路：启动 → 自动联网 → `/api/ota/check` → WebSocket hello → cube demo 启动。
+
 ## 后续计划
 
 ### 近期
 
 - 将 `BOOT_REGISTER_URL` 从源码常量改为构建配置，区分 local、staging、production。
+- 增加测试阶段自动联网配置，避免每次硬件 demo 都走 BLE 配网。
 - 小程序增加设备上线等待页，明确显示配网成功、注册中、绑定中、在线。
 - 小程序设备列表展示在线状态、固件版本、设备名称。
 - 增加固件串口日志级别开关，避免 release 版本输出过多调试日志。
