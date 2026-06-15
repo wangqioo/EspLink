@@ -201,7 +201,7 @@ backend/
 
 `backend/` 是当前正式后端，来源于 `/Users/wq/ai_deploy_backend`。它统一承载管理 API、设备 WebSocket 网关、固件上传、固件发布和 OTA check。
 
-`cloud/` 是早期 FastAPI 方案草案，保留作历史参考，不再作为主开发后端。
+旧 FastAPI 云端草案已从工作树删除；如需追溯历史实现，以 Git 历史记录为准。
 
 ### 3.2 设备注册与绑定流程
 

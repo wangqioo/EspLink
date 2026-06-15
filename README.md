@@ -36,7 +36,7 @@ EspLink/
 │   ├── app.js
 │   └── project.config.json
 │
-├── esplink-firmware/     # ESP32-S3 固件（IDF 5.x）
+└── esplink-firmware/     # ESP32-S3 固件（IDF 5.x）
     ├── main/
     │   ├── main.c        # 入口，状态机（未配网 / 配网中 / 已联网）
     │   ├── app_blufi.c   # BluFi 事件处理，发送 WiFi 结果通知
@@ -49,8 +49,6 @@ EspLink/
     ├── CMakeLists.txt
     ├── partitions.csv
     └── sdkconfig.defaults
-│
-└── cloud/                # Legacy：早期 FastAPI 后端草案，正式后端已迁移到 backend/
 ```
 
 ---
