@@ -125,6 +125,40 @@ static void on_ws_json(const char *json)
     cJSON_Delete(root);
 }
 
+static char *json_strdup(cJSON *object, const char *name)
+{
+    const char *value = cJSON_GetStringValue(cJSON_GetObjectItem(object, name));
+    return value ? strdup(value) : NULL;
+}
+
+static void free_ota_update(app_ota_update_t *update)
+{
+    free((void *)update->url);
+    free((void *)update->version);
+    free((void *)update->sha256);
+    memset(update, 0, sizeof(*update));
+}
+
+static bool parse_ota_update(cJSON *ota_obj, app_ota_update_t *update)
+{
+    if (!ota_obj || !update) return false;
+    memset(update, 0, sizeof(*update));
+
+    update->url = json_strdup(ota_obj, "url");
+    if (!update->url) {
+        free_ota_update(update);
+        return false;
+    }
+
+    update->version = json_strdup(ota_obj, "version");
+    update->sha256 = json_strdup(ota_obj, "sha256");
+
+    cJSON *size = cJSON_GetObjectItem(ota_obj, "size_bytes");
+    update->size_bytes = cJSON_IsNumber(size) ? size->valueint : 0;
+    update->force = cJSON_IsTrue(cJSON_GetObjectItem(ota_obj, "force"));
+    return true;
+}
+
 static void connect_to_server(void)
 {
     char ws_url[256] = {0};
@@ -209,14 +243,17 @@ static void boot_register_task(void *arg)
 
     // 1. 服务端如果在响应里包含 ota 对象，说明有固件更新，优先处理
     cJSON *ota_obj = cJSON_GetObjectItem(root, "ota");
-    if (ota_obj) {
-        const char *ota_url = cJSON_GetStringValue(
-                                  cJSON_GetObjectItem(ota_obj, "url"));
-        if (ota_url) {
-            ESP_LOGI(TAG, "OTA available, upgrading...");
+    app_ota_update_t update;
+    if (parse_ota_update(ota_obj, &update)) {
+        ESP_LOGI(TAG, "OTA available, upgrading...");
+        set_state(STATE_UPGRADING);
+        esp_err_t ota_err = app_ota_upgrade(&update); // 成功时内部 restart
+        free_ota_update(&update);
+        if (ota_err == ESP_ERR_NOT_FOUND) {
+            ESP_LOGI(TAG, "OTA skipped, continuing boot register");
+        } else {
             cJSON_Delete(root);
-            set_state(STATE_UPGRADING);
-            app_ota_upgrade_from_url(ota_url); // 成功时内部 restart
+            ESP_LOGE(TAG, "OTA upgrade failed: %s", esp_err_to_name(ota_err));
             set_state(STATE_FATAL_ERROR);       // 升级失败才到这里
             vTaskDelete(NULL);
             return;

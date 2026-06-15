@@ -1,5 +1,6 @@
 #include "app_device.h"
 #include "app_nvs.h"
+#include "board_config.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "esp_log.h"
@@ -7,7 +8,6 @@
 #include <stdio.h>
 
 #define TAG             "app_device"
-#define FIRMWARE_VER    "1.0.0"
 
 static char s_mac_str[18];
 static char s_sn[DEVICE_SN_LEN];
@@ -36,11 +36,11 @@ esp_err_t app_device_init(void)
     }
 
     ESP_LOGI(TAG, "MAC=%s  SN=%s  BLE_NAME=%s  FW=%s",
-             s_mac_str, s_sn, s_ble_name, FIRMWARE_VER);
+             s_mac_str, s_sn, s_ble_name, BOARD_FIRMWARE_VERSION);
     return ESP_OK;
 }
 
 const char *app_device_get_mac_str(void)        { return s_mac_str; }
 const char *app_device_get_sn(void)             { return s_sn; }
 const char *app_device_get_ble_name(void)       { return s_ble_name; }
-const char *app_device_get_firmware_version(void) { return FIRMWARE_VER; }
+const char *app_device_get_firmware_version(void) { return BOARD_FIRMWARE_VERSION; }
