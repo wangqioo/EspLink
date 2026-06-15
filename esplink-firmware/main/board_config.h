@@ -9,7 +9,7 @@
 
 #define BOARD_TYPE             "esplink-v1"
 #define BOARD_UI_PAGE          "default"
-#define BOARD_FIRMWARE_VERSION "1.0.1"
+#define BOARD_FIRMWARE_VERSION "1.0.2"
 
 // 设备能力 JSON，整体上报给云端和小程序
 // 注意：用字符串拼接宏，board_type / ui_page 保持单一来源

@@ -16,6 +16,7 @@
 #include "app_ws.h"
 #include "app_ota.h"
 #include "app_button.h"
+#include "app_cube_demo.h"
 #include "board_config.h"
 
 #define TAG "main"
@@ -178,6 +179,14 @@ static void connect_to_server(void)
     }
 }
 
+static void start_product_app(void)
+{
+    esp_err_t err = app_cube_demo_start();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "product app start failed: %s", esp_err_to_name(err));
+    }
+}
+
 // ---------- 启动注册（合并激活 + OTA 检查） ----------
 
 static char s_reg_resp[512];
@@ -282,6 +291,7 @@ static void boot_register_task(void *arg)
 
     set_state(STATE_ONLINE);
     connect_to_server();
+    start_product_app();
     vTaskDelete(NULL);
 }
 

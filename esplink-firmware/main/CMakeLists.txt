@@ -8,6 +8,8 @@ idf_component_register(
         "app_ws.c"
         "app_ota.c"
         "app_button.c"
+        "app_cube_demo.c"
+        "esp32_s3_szp.c"
     INCLUDE_DIRS "."
     REQUIRES
         nvs_flash
@@ -21,4 +23,5 @@ idf_component_register(
         mbedtls
         json
         driver
+        esp_lcd
 )
