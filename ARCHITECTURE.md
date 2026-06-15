@@ -188,21 +188,20 @@ Unknown → Starting → [WifiProvisioning] → WifiConnecting
 
 ## 三、云平台层
 
-### 3.1 服务拆分
+### 3.1 当前服务结构
 
 ```
-cloud/
-├── gateway/        # WebSocket 网关（Python asyncio / Node.js）
-│                   # 维护设备长连接，消息路由
-├── api/            # 管理 API（Python FastAPI 或 Spring Boot）
-│                   # 用户、设备、OTA、消息 CRUD
-├── ota-server/     # 固件文件服务（Nginx 静态 or S3）
-└── web/            # 管理后台（Vue 3）
+backend/
+├── src/              # Node/Express API、设备 WebSocket、OTA、业务服务
+├── prisma/           # 数据库 schema
+├── db/               # 数据库脚本和迁移记录
+├── admin-frontend/   # React + Ant Design 管理后台
+└── uploads/          # 本地固件文件目录，运行时生成，不提交 Git
 ```
 
-**为什么拆分 gateway 和 api**：
-- Gateway 需要维护大量长连接，适合异步 IO（Python asyncio / Node.js）
-- API 是普通 CRUD，可以用任何框架，压力小，可独立扩展
+`backend/` 是当前正式后端，来源于 `/Users/wq/ai_deploy_backend`。它统一承载管理 API、设备 WebSocket 网关、固件上传、固件发布和 OTA check。
+
+`cloud/` 是早期 FastAPI 方案草案，保留作历史参考，不再作为主开发后端。
 
 ### 3.2 设备注册与绑定流程
 
@@ -412,11 +411,11 @@ onLoad({ deviceId }) {
 | 层 | 推荐 | 说明 |
 |----|------|------|
 | 固件 | ESP-IDF 5.x · C/C++ | 现有基础，继续沿用 |
-| WebSocket 网关 | Python asyncio + websockets | 轻量，与 xiaozhi-server 同技术栈 |
-| 管理 API | Python FastAPI | 与网关同语言，减少技术栈碎片 |
-| 数据库 | MySQL 8 + Redis | 主存储 + 设备状态缓存/bind_code |
-| OTA 文件 | Nginx 静态服务 / 腾讯云 COS | 早期 Nginx 够用 |
-| 管理后台 | Vue 3 + Element Plus | 可选，早期用 FastAPI 自带 swagger |
+| 后端 API | Node.js + Express | 当前正式后端，位于 `backend/` |
+| WebSocket 网关 | Node.js + ws | 与设备长连接、hello/ping/OTA push 同进程管理 |
+| 数据库 | Prisma + SQLite/MySQL 兼容路径 | 当前本地开发使用 Prisma，后续按部署环境切换数据库 |
+| OTA 文件 | Express 静态文件服务 | 管理后台上传 `.bin` 到 `uploads/firmware`，通过 `/firmware/*` 提供下载 |
+| 管理后台 | React + Vite + Ant Design | 位于 `backend/admin-frontend/` |
 | 小程序 | 微信原生 · JavaScript | 现有基础，继续沿用 |
 
 ---
@@ -491,8 +490,8 @@ onLoad({ deviceId }) {
 
 目标：设备能上云、能绑定、能被小程序看到。
 
-- [x] Python FastAPI 项目骨架（`cloud/api/`）
-- [x] MySQL 建表：`users` / `devices` / `ota_firmware`（Alembic 迁移）
+- [x] Node/Express 正式后端已并入 `backend/`
+- [x] Prisma 数据模型和数据库脚本已并入 `backend/prisma`、`backend/db`
 - [x] `POST /api/ota/check`：设备激活引导端点，自动注册未知设备，返回 `websocket_url` + `token` + `is_bound` + `ota?`
 - [x] WebSocket 网关（`/ws/device`）：设备连接认证、hello/ping/status/event 消息处理、在线状态维护
 - [x] `POST /api/device/bind`：小程序 BLE 配网后调用，用 MAC 绑定设备到当前用户
@@ -500,19 +499,22 @@ onLoad({ deviceId }) {
 - [x] `POST /api/device/{id}/command`：小程序向设备下发指令
 - [x] `POST /api/auth/wechat`：微信小程序登录，支持开发模式（无需真实 AppID）
 - [x] Redis：设备在线状态缓存（90s TTL，ping 续期）
-- [x] Docker Compose：MySQL + Redis + API 一键启动
+- [x] 管理后台固件发布：上传 `.bin` 后自动生成 URL、SHA256 和文件大小
+- [x] Dockerfile / docker-compose 本地部署配置已并入 `backend/`
 
 **本地启动：**
 ```bash
-cd cloud/api
-cp .env.example .env        # 按需修改配置
-cd ..
-docker compose up -d mysql redis
-cd api
-pip install -r requirements.txt
-alembic upgrade head         # 建表
-uvicorn app.main:app --reload
-# 访问 http://localhost:8000/docs 查看 API 文档
+cd backend
+cp .env.example .env
+npm install
+npm run db:generate
+npm test
+npm run dev
+
+cd admin-frontend
+npm install
+npm run build
+npm run dev
 ```
 
 ### Phase 4 — 小程序多产品支持（2-3周）
@@ -532,7 +534,7 @@ uvicorn app.main:app --reload
 - [x] 第一个 OTA 示例固件：`cube_3d_v1.0` 已集成到 EspLink OTA 壳，版本 `esplink-v1 / 1.0.2`
 - [ ] 设备指令下发：小程序 → 云端 API → WebSocket 网关 → 设备
 - [ ] 第二款 ESP32 产品接入，验证多产品框架闭环
-- [ ] 管理后台 Web（Vue 3）：设备统计、固件管理、用户管理
+- [ ] 管理后台 Web 增强：设备统计、固件管理、用户管理
 - [ ] 测试阶段自动联网：提供非提交入库的本地 WiFi 注入方式，跳过 BLE 配网验证硬件 demo
 
 ---

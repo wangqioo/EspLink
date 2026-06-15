@@ -2,6 +2,17 @@
 esplink-app/project.private.config.json
 esplink-app/node_modules/
 
+# Node backend and admin frontend
+backend/node_modules/
+backend/admin-frontend/node_modules/
+backend/admin-frontend/dist/
+backend/.env
+backend/uploads/
+backend/tmp/
+backend/*.log
+backend/.prisma/
+backend/.claude/
+
 # ESP-IDF firmware build artifacts
 esplink-firmware/build/
 esplink-firmware/managed_components/

@@ -1,17 +1,16 @@
 # EspLink
 
-**ESP32-S3 设备配网工具 — 微信小程序 + 固件**
+**ESP32-S3 设备上云平台 — Node 后端 + 管理后台 + 微信小程序 + 固件**
 
-通过微信小程序扫描附近蓝牙设备，用 BluFi 协议把 WiFi 凭证安全地推送给 ESP32-S3，完成设备首次入网。
+通过微信小程序扫描附近蓝牙设备，用 BluFi 协议把 WiFi 凭证安全地推送给 ESP32-S3；设备联网后接入本地/云端后端，完成设备注册、WebSocket 在线状态、固件发布和 OTA 升级。
 
 最新本地硬件联调记录、已完成修复和后续计划见：[2026-06-13 本地联调记录与后续计划](./docs/2026-06-13-local-integration.md)。
 
 ```
-手机微信小程序
-      │
-      │  BLE + BluFi 协议
-      ▼
-ESP32-S3 固件  ──→  连接 WiFi  ──→  设备上线
+管理后台 Web  ──→  Node 后端/API/WebSocket/OTA
+                         ▲
+                         │ WiFi + HTTP/WebSocket
+手机微信小程序 ──BLE──→ ESP32-S3 固件
 ```
 
 ---
@@ -20,6 +19,12 @@ ESP32-S3 固件  ──→  连接 WiFi  ──→  设备上线
 
 ```
 EspLink/
+├── backend/              # 正式后端：Node/Express API + WebSocket + React 管理后台
+│   ├── src/              # API、设备 WebSocket、OTA、业务服务
+│   ├── prisma/           # 数据库 schema
+│   ├── db/               # 数据库脚本和迁移记录
+│   └── admin-frontend/   # React + Ant Design 管理后台
+│
 ├── esplink-app/          # 微信小程序（配网客户端）
 │   ├── pages/
 │   │   ├── index/        # 蓝牙扫描 & 设备列表
@@ -31,23 +36,61 @@ EspLink/
 │   ├── app.js
 │   └── project.config.json
 │
-└── esplink-firmware/     # ESP32-S3 固件（IDF 5.x）
+├── esplink-firmware/     # ESP32-S3 固件（IDF 5.x）
     ├── main/
     │   ├── main.c        # 入口，状态机（未配网 / 配网中 / 已联网）
     │   ├── app_blufi.c   # BluFi 事件处理，发送 WiFi 结果通知
     │   ├── app_wifi.c    # WiFi 连接管理
     │   ├── app_button.c  # BOOT 键：长按 5 秒恢复出厂
     │   ├── app_nvs.c     # NVS 持久化（WiFi 凭证）
-    │   ├── app_ota.c     # OTA 升级（预留）
-    │   └── app_ws.c      # WebSocket（预留，上线后与终端服务通信）
+    │   ├── app_ota.c     # OTA 升级
+    │   ├── app_ws.c      # WebSocket 设备连接
+    │   └── app_cube_demo.c # 3D cube OTA 示例产品模块
     ├── CMakeLists.txt
     ├── partitions.csv
     └── sdkconfig.defaults
+│
+└── cloud/                # Legacy：早期 FastAPI 后端草案，正式后端已迁移到 backend/
 ```
 
 ---
 
 ## 快速开始
+
+### 后端与管理后台（backend）
+
+**环境要求**
+- Node.js 18+
+- npm
+- 可用数据库配置（见 `backend/.env.example`）
+
+**安装与启动**
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run db:generate
+npm test
+npm run dev
+```
+
+管理后台：
+
+```bash
+cd backend/admin-frontend
+npm install
+npm run build
+npm run dev
+```
+
+主要能力：
+
+- 设备启动注册：`POST /api/ota/check`
+- 设备 WebSocket：`/ws/device`
+- 固件上传：`POST /api/v1/firmware/artifacts`
+- 固件发布：`POST /api/v1/firmware/releases`
+- 管理后台固件发布页面：上传 `.bin` 后自动填入 URL、SHA256 和大小
 
 ### 固件（esplink-firmware）
 
