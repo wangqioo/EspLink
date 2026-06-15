@@ -1,0 +1,18 @@
+menu "EspLink"
+
+config ESPLINK_BOOT_REGISTER_URL
+    string "Boot register URL"
+    default "http://192.168.1.26:8088/api/ota/check"
+    help
+        Endpoint called after WiFi connects. The response provides the
+        WebSocket URL, device token, binding state, and optional OTA decision.
+
+config ESPLINK_TEST_AUTO_WIFI
+    bool "Enable local test WiFi injection"
+    default n
+    help
+        Test-only shortcut. When enabled, firmware reads SSID/password from
+        main/local_wifi_config.h, writes them into NVS during boot, and skips
+        BLE provisioning. Keep disabled for normal development and production.
+
+endmenu

@@ -222,18 +222,19 @@ main: === device boot: board=esplink-v1 fw=1.0.2 ===
 - 设备未保存 WiFi 凭据时会进入 BLE 配网。
 - cube demo 当前设计为 online 后启动，所以没有 WiFi 凭据时不会显示 cube。
 
-测试阶段待办：
+测试阶段自动联网：
 
-- 增加本地测试 WiFi 注入方式，跳过 BLE 配网。
-- WiFi SSID/密码不得提交到 Git；使用本地 ignored 配置、NVS 写入工具或 menuconfig local override。
-- 配好 WiFi 后验证完整链路：启动 → 自动联网 → `/api/ota/check` → WebSocket hello → cube demo 启动。
+- 已支持本地测试 WiFi 注入方式，跳过 BLE 配网。
+- `BOOT_REGISTER_URL` 已改为 Kconfig 配置项：`CONFIG_ESPLINK_BOOT_REGISTER_URL`。
+- 自动联网开关为 `CONFIG_ESPLINK_TEST_AUTO_WIFI`，默认关闭。
+- WiFi SSID/密码放在 `esplink-firmware/main/local_wifi_config.h`，该文件已被 Git 忽略；模板为 `local_wifi_config.example.h`。
+- 下一轮硬件验证：启动 → 自动联网 → `/api/ota/check` → WebSocket hello → cube demo 启动。
 
 ## 后续计划
 
 ### 近期
 
-- 将 `BOOT_REGISTER_URL` 从源码常量改为构建配置，区分 local、staging、production。
-- 增加测试阶段自动联网配置，避免每次硬件 demo 都走 BLE 配网。
+- 验证测试阶段自动联网完整链路，确认无需 BLE 配网也能启动 cube demo。
 - 小程序增加设备上线等待页，明确显示配网成功、注册中、绑定中、在线。
 - 小程序设备列表展示在线状态、固件版本、设备名称。
 - 增加固件串口日志级别开关，避免 release 版本输出过多调试日志。

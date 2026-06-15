@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_http_client.h"
+#include "sdkconfig.h"
 #include "cJSON.h"
 #include <string.h>
 #include <stdio.h>
@@ -19,13 +20,13 @@
 #include "app_cube_demo.h"
 #include "board_config.h"
 
+#if CONFIG_ESPLINK_TEST_AUTO_WIFI
+#include "local_wifi_config.h"
+#endif
+
 #define TAG "main"
 
 #define FACTORY_RESET_GPIO  0
-
-// 启动注册端点：合并了激活 + OTA 检查，设备每次上电请求一次
-// 服务端根据 board_type 和 firmware_version 决定是否下发 OTA
-#define BOOT_REGISTER_URL   "http://192.168.1.26:8088/api/ota/check"
 
 // ---------- 状态机 ----------
 
@@ -187,6 +188,26 @@ static void start_product_app(void)
     }
 }
 
+static void apply_test_auto_wifi(void)
+{
+#if CONFIG_ESPLINK_TEST_AUTO_WIFI
+    if (strlen(ESPLINK_LOCAL_WIFI_SSID) == 0) {
+        ESP_LOGW(TAG, "test auto WiFi enabled but SSID is empty");
+        return;
+    }
+
+    ESP_LOGW(TAG, "test auto WiFi enabled, writing local SSID to NVS");
+    esp_err_t err = app_nvs_set_wifi(
+        ESPLINK_LOCAL_WIFI_SSID,
+        ESPLINK_LOCAL_WIFI_PASSWORD
+    );
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to write local WiFi credentials: %s",
+                 esp_err_to_name(err));
+    }
+#endif
+}
+
 // ---------- 启动注册（合并激活 + OTA 检查） ----------
 
 static char s_reg_resp[512];
@@ -202,6 +223,14 @@ static esp_err_t reg_http_event(esp_http_client_event_t *evt)
         s_reg_resp_len += copy;
     }
     return ESP_OK;
+}
+
+static esp_http_client_transport_t transport_for_url(const char *url)
+{
+    if (url && strncmp(url, "http://", 7) == 0) {
+        return HTTP_TRANSPORT_OVER_TCP;
+    }
+    return HTTP_TRANSPORT_OVER_SSL;
 }
 
 static void boot_register_task(void *arg)
@@ -221,10 +250,10 @@ static void boot_register_task(void *arg)
     s_reg_resp_len = 0;
 
     esp_http_client_config_t cfg = {
-        .url            = BOOT_REGISTER_URL,
+        .url            = CONFIG_ESPLINK_BOOT_REGISTER_URL,
         .event_handler  = reg_http_event,
         .method         = HTTP_METHOD_POST,
-        .transport_type = HTTP_TRANSPORT_OVER_TCP,
+        .transport_type = transport_for_url(CONFIG_ESPLINK_BOOT_REGISTER_URL),
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     esp_http_client_set_header(client, "Content-Type", "application/json");
@@ -356,6 +385,7 @@ void app_main(void)
     ESP_ERROR_CHECK(app_wifi_init(on_wifi_connected, on_wifi_disconnected));
     ESP_ERROR_CHECK(app_device_init());
     ESP_ERROR_CHECK(app_button_init(FACTORY_RESET_GPIO, on_factory_reset));
+    apply_test_auto_wifi();
 
     set_state(STATE_STARTING);
 

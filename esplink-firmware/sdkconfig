@@ -595,6 +595,13 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# EspLink
+#
+CONFIG_ESPLINK_BOOT_REGISTER_URL="http://192.168.1.26:8088/api/ota/check"
+# CONFIG_ESPLINK_TEST_AUTO_WIFI is not set
+# end of EspLink
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y

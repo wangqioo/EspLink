@@ -125,6 +125,23 @@ I (xxx) BLUFI: BLE started, advertising as "Device-XXXX"
 
 长按 BOOT 键（GPIO 0）**5 秒**，NVS 中的 WiFi 凭证被清除，设备重启重新进入待配网状态。
 
+**测试阶段自动联网**
+
+默认固件仍走正常 BLE 配网。需要跳过配网做本地硬件 demo 时，创建本地 WiFi 配置文件并打开 Kconfig 开关：
+
+```bash
+cd esplink-firmware
+cp main/local_wifi_config.example.h main/local_wifi_config.h
+
+# 编辑 main/local_wifi_config.h，填入本地 SSID/密码
+idf.py menuconfig
+# EspLink → Enable local test WiFi injection
+# EspLink → Boot register URL
+idf.py build flash monitor
+```
+
+`main/local_wifi_config.h` 已被 Git 忽略，WiFi 密码不得提交。开关关闭时，固件行为恢复为“有 NVS WiFi 就自动连接，没有就 BLE 配网”。
+
 ---
 
 ### 小程序（esplink-app）
@@ -209,13 +226,14 @@ type = (subtype << 2) | frameType
 - [x] 配网成功 / 失败通知（Notify 回调）
 - [x] NVS 持久化 WiFi 凭证
 - [x] 恢复出厂设置（长按 5 秒）
+- [x] 测试阶段自动联网配置（本地 ignored WiFi 文件 + Kconfig 开关）
 - [ ] provision 页面输入框渲染 bug 修复
 
 ### 近期目标
 
 - [ ] provision 页面输入框渲染 bug 修复
 - [ ] SSID 自动填充（`getCurrentWifiSSID()` 重新接入配网流程）
-- [ ] 设备 OTA 升级流程（`app_ota.c` 已预留框架）
+- [ ] OTA 真机升级闭环验证（网页发布 `.bin` → 设备下载刷写 → 重启上报新版本）
 - [ ] 多设备管理（小程序端支持已配网设备列表）
 - [ ] 配网二维码快速模式（无需蓝牙扫描）
 
