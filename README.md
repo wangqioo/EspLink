@@ -4,7 +4,9 @@
 
 通过微信小程序扫描附近蓝牙设备，用 BluFi 协议把 WiFi 凭证安全地推送给 ESP32-S3；设备联网后接入本地/云端后端，完成设备注册、WebSocket 在线状态、固件发布和 OTA 升级。
 
-最新本地硬件联调记录、已完成修复和后续计划见：[2026-06-13 本地联调记录与后续计划](./docs/2026-06-13-local-integration.md)。
+最新开发状态、OTA 实机验证和剩余工作见：[2026-06-16 开发状态与实机验证记录](./docs/2026-06-16-development-status.md)。
+
+历史本地联调记录见：[2026-06-13 本地联调记录与后续计划](./docs/2026-06-13-local-integration.md)。
 
 ```
 管理后台 Web  ──→  Node 后端/API/WebSocket/OTA
@@ -89,6 +91,7 @@ npm run dev
 - 固件上传：`POST /api/v1/firmware/artifacts`
 - 固件发布：`POST /api/v1/firmware/releases`
 - 管理后台固件发布页面：上传 `.bin` 后自动填入 URL、SHA256 和大小
+- OTA 真机升级闭环：已实测 `esplink-v1` 从 `1.0.2` 升级到 `1.0.3`
 
 ### 固件（esplink-firmware）
 
@@ -213,6 +216,8 @@ type = (subtype << 2) | frameType
 |------|------|------|
 | provision 页面 WiFi 名称 / 密码输入框不显示内容 | **未解决** | 已切换 `wx:if`（非 `wx:show`）、去除 `value` 绑定，iOS 上原生 `<input>` 渲染行为异常，仍在排查 |
 | SSID 自动填充 | 暂停 | `getCurrentWifiSSID()` 已实现但从配网流程移除，等上面 bug 修好后再加回 |
+| 生产设备签名 | 待接入固件 | 后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件还需要携带 `timestamp/nonce/signature` |
+| OTA SHA256 严格校验 | 待实现 | 后端已返回 SHA256，固件当前只记录日志，生产前需校验下载产物 |
 
 ---
 
@@ -227,13 +232,20 @@ type = (subtype << 2) | frameType
 - [x] NVS 持久化 WiFi 凭证
 - [x] 恢复出厂设置（长按 5 秒）
 - [x] 测试阶段自动联网配置（本地 ignored WiFi 文件 + Kconfig 开关）
+- [x] 后端固件上传与发布 API
+- [x] 管理后台固件发布页面
+- [x] OTA 真机升级闭环验证（`1.0.2 -> 1.0.3`）
+- [x] 3D cube demo 接入 EspLink 固件启动链路
 - [ ] provision 页面输入框渲染 bug 修复
 
 ### 近期目标
 
+- [ ] 生产设备 PSK 签名接入固件启动注册
+- [ ] 当前仓库 `.env`、数据库、Redis、前端和后端部署配置收口
+- [ ] OTA 下载 SHA256 严格校验
+- [ ] 强制 OTA、错误 bin、下载中断、升级失败恢复回归测试
 - [ ] provision 页面输入框渲染 bug 修复
 - [ ] SSID 自动填充（`getCurrentWifiSSID()` 重新接入配网流程）
-- [ ] OTA 真机升级闭环验证（网页发布 `.bin` → 设备下载刷写 → 重启上报新版本）
 - [ ] 多设备管理（小程序端支持已配网设备列表）
 - [ ] 配网二维码快速模式（无需蓝牙扫描）
 

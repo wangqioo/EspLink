@@ -2,7 +2,9 @@
 
 基于 ESP32 的 AI 硬件设备运营管控平台。已与 EspLink BLE 配网系统打通：用户通过微信小程序蓝牙配网后，设备自动注册上线并与账号绑定；设备通过 WebSocket 长连接与后端保持实时通信，后端代理多家大模型厂商 API 并以流式方式推送 AI 回答。管理员通过后台掌握所有设备、租户和用量数据，并统一管理各厂商 API Key 与租户套餐。
 
-最新本地硬件联调记录、已完成修复和后续计划见：[2026-06-13 EspLink 本地联调记录与后续计划](./docs/2026-06-13-esplink-local-integration.md)。
+最新开发状态、OTA 实机验证和剩余工作见：[../docs/2026-06-16 开发状态与实机验证记录](../docs/2026-06-16-development-status.md)。
+
+历史本地联调记录见：[2026-06-13 EspLink 本地联调记录与后续计划](./docs/2026-06-13-esplink-local-integration.md)。
 
 ---
 
@@ -105,6 +107,10 @@
 | 设备 | `POST /api/v1/devices/register` | 固件自注册（无需认证） |
 | 设备 | `POST /api/v1/devices/:mac/kick` | 强制下线 |
 | 设备 | `POST /api/v1/devices/:mac/unbind` | 解绑 |
+| 固件 | `POST /api/v1/firmware/artifacts` | 上传 `.bin`，返回 URL、SHA256 和大小 |
+| 固件 | `GET /api/v1/firmware/releases` | 固件发布列表 |
+| 固件 | `POST /api/v1/firmware/releases` | 创建固件发布 |
+| 固件 | `PATCH /api/v1/firmware/releases/:id/active` | 启用 / 停用发布 |
 | 用量 | `GET /api/v1/usage/summary` | 汇总统计 |
 | 用量 | `GET /api/v1/usage/daily` | 按天趋势 |
 | 用量 | `GET /api/v1/usage/logs` | 调用明细（7天内） |
@@ -166,23 +172,40 @@
 
 ## 硬件联调快速测试
 
-> 后端、固件编译、小程序调试全部在 **Mac**（`172.20.10.3`）上进行。BLE 连接需用微信开发者工具**真机调试**扫码到真实手机，模拟器不支持。
+> 后端、固件编译、小程序调试全部在 Mac 上进行。BLE 连接需用微信开发者工具**真机调试**扫码到真实手机，模拟器不支持。
+>
+> 2026-06-16 本地实测 Mac IP 为 `192.168.1.26`。如果 IP 变化，需要同步更新后端 `WS_BASE_URL/PUBLIC_BASE_URL`、小程序 `BASE_URL` 和固件 `CONFIG_ESPLINK_BOOT_REGISTER_URL`。
 
 ### 1. 启动 Mac 后端
 
 ```bash
 export PATH="/opt/homebrew/bin:$PATH"
 brew services start mysql && brew services start redis
-cd /Users/hushaohong/vibe-coding/ai_deploy_backend && npm run dev
-# 另开终端：cd admin-frontend && npm run dev
+cd /Users/wq/EspLink/backend
+
+# 当前仓库尚未提交真实 .env；本地验证临时复用旧后端 .env
+set -a
+source /Users/wq/ai_deploy_backend/.env
+set +a
+export WS_BASE_URL=ws://192.168.1.26:8088
+export PUBLIC_BASE_URL=http://192.168.1.26:8088
+npm start
 ```
+
+验证 ready：
+
+```bash
+curl --noproxy '*' -s http://127.0.0.1:8088/api/v1/health/ready
+```
+
+期望 `db=true`、`redis=true`。
 
 ### 2. 微信开发者工具配置
 
-- 导入 `/Users/hushaohong/vibe-coding/EspLink/esplink-app/`，AppID = `wxa4fae319f609fdce`
+- 导入 `/Users/wq/EspLink/esplink-app/`
 - **「···」→「项目设置」→「本地设置」** 勾选「不校验合法域名」
 - **设置 → 代理 → 不使用代理**
-- `utils/api.js` 第 1 行：`BASE_URL = 'http://172.20.10.3:8088'`（真机调试须用局域网 IP）
+- `utils/api.js` 使用局域网 IP，例如：`BASE_URL = 'http://192.168.1.26:8088'`
 
 ### 3. 配网流程
 
@@ -194,6 +217,30 @@ cd /Users/hushaohong/vibe-coding/ai_deploy_backend && npm run dev
 6. 管理后台 http://localhost:5173 → 设备管理 → 可见设备在线 ✅
 
 详细排障见 [CLAUDE.md](./CLAUDE.md) 的「硬件联调测试流程」章节。
+
+## OTA 实机验证
+
+2026-06-16 已完成真实 OTA 闭环：
+
+- 基线固件：`esplink-v1 / 1.0.2`
+- 目标固件：`esplink-v1 / 1.0.3`
+- 设备：`10:51:DB:80:E2:E8`
+- 写入分区：`ota_0`
+- 结果：设备重启后从 `0x1a0000` 启动，上报 `firmware=1.0.3`，WebSocket 重新在线
+
+关键日志：
+
+```text
+main: OTA available, upgrading...
+esp_https_ota: Writing to <ota_0> partition at offset 0x1a0000
+app_ota: OTA success, restarting
+boot: Loaded app from partition at offset 0x1a0000
+main: === device boot: board=esplink-v1 fw=1.0.3 ===
+app_ws: WebSocket connected
+main: hello_ack: is_bound=1
+```
+
+完整步骤见：[ESP32 OTA 实机验证手册](./docs/2026-06-15-esp32-ota-validation-runbook.md)。
 
 ---
 

@@ -2,9 +2,58 @@
 
 本文记录 `ai_deploy_backend` + `EspLink` 的本地 OTA 实机验证流程。目标是验证 ESP32 设备可以从后端获取固件发布信息，下载 OTA 包，写入 OTA 分区，重启后切换到新版本并重新上线。
 
-## 本次实测结论
+## 最新实测结论（2026-06-16）
 
-- 后端仓库：`/Users/wq/ai_deploy_backend`
+- 后端仓库：`/Users/wq/EspLink/backend`
+- 固件仓库：`/Users/wq/EspLink/esplink-firmware`
+- 后端地址：`http://192.168.1.26:8088`
+- WebSocket 地址：`ws://192.168.1.26:8088/ws/device`
+- 设备串口：`/dev/cu.usbmodem111301`
+- 设备 MAC：`10:51:DB:80:E2:E8`
+- 设备 IP：`192.168.1.32`
+- 起始固件版本：`1.0.2`
+- OTA 目标版本：`1.0.3`
+- OTA 写入分区：`ota_0`
+- OTA 结果：成功，重启后从 `0x1a0000` 启动并上报 `fw=1.0.3`
+
+实测关键日志：
+
+```text
+main: === device boot: board=esplink-v1 fw=1.0.2 ===
+main: OTA available, upgrading...
+app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin
+app_ota: OTA target version=1.0.3 force=0 size=1261392
+esp_https_ota: Writing to <ota_0> partition at offset 0x1a0000
+app_ota: OTA success, restarting
+boot: Loaded app from partition at offset 0x1a0000
+main: === device boot: board=esplink-v1 fw=1.0.3 ===
+main: boot register ok, is_bound=1
+app_ws: WebSocket connected
+main: hello_ack: is_bound=1
+```
+
+数据库确认：
+
+```text
+mac_address  board_type   firmware  is_online  last_seen
+10:51:DB:80:E2:E8  esplink-v1  1.0.3  1  2026-06-16 01:01:01
+```
+
+后端发布记录：
+
+```text
+id=3
+board_type=esplink-v1
+version=1.0.3
+size_bytes=1261392
+sha256=475c032834fb9f92373c848ca999416018a11d10cad395874f75fc5648aae1bb
+is_active=1
+force_update=0
+```
+
+## 历史实测结论（2026-06-15）
+
+- 后端仓库：`/Users/wq/ai_deploy_backend`（历史路径）
 - 固件仓库：`/Users/wq/EspLink`
 - 后端地址：`http://192.168.1.26:8088`
 - WebSocket 地址：`ws://192.168.1.26:8088/ws/device`
@@ -56,14 +105,32 @@ ota_1,    app,  ota_1,   0x320000, 0x180000,
 本地数据库需要与 Prisma schema 同步：
 
 ```bash
-cd /Users/wq/ai_deploy_backend
+cd /Users/wq/EspLink/backend
 npx prisma db push
 ```
+
+如果当前板子被其他固件覆盖，先重新烧录 EspLink 基线固件。串口启动日志必须显示 OTA 分区表：
+
+```text
+otadata
+factory
+ota_0
+ota_1
+```
+
+如果只看到 factory-only 分区表，不能进行 EspLink OTA 验证。
 
 ## 1. 启动并验证后端
 
 ```bash
-cd /Users/wq/ai_deploy_backend
+cd /Users/wq/EspLink/backend
+
+# 当前仓库未提交真实 .env；本地验证可临时复用旧后端 .env
+set -a
+source /Users/wq/ai_deploy_backend/.env
+set +a
+export WS_BASE_URL=ws://192.168.1.26:8088
+export PUBLIC_BASE_URL=http://192.168.1.26:8088
 npm start
 ```
 
@@ -81,10 +148,10 @@ curl --noproxy '*' -s http://192.168.1.26:8088/api/v1/health/ready
 
 ## 2. 构建 OTA 目标固件
 
-在 `EspLink` 中把目标版本改高，例如从 `1.0.0` 改到 `1.0.1`：
+在 `EspLink` 中把目标版本改高，例如从 `1.0.2` 改到 `1.0.3`：
 
 ```c
-#define BOARD_FIRMWARE_VERSION "1.0.1"
+#define BOARD_FIRMWARE_VERSION "1.0.3"
 ```
 
 构建固件：
@@ -98,8 +165,8 @@ idf.py build
 确认生成的 app 小于 OTA 分区。本次实测：
 
 ```text
-esp32s3_device.bin binary size 0x122be0 bytes.
-Smallest app partition is 0x180000 bytes. 0x5d420 bytes (24%) free.
+esp32s3_device.bin binary size 0x133f50 bytes.
+Smallest app partition is 0x180000 bytes. 0x4c0b0 bytes (20%) free.
 ```
 
 ## 3. 发布 OTA 包
@@ -122,11 +189,11 @@ Smallest app partition is 0x180000 bytes. 0x5d420 bytes (24%) free.
 - SHA256
 - 文件大小（字节）
 
-如果文件名符合 `板型-版本号.bin`，例如 `esplink-v1-1.0.2.bin`，页面还会自动填入目标板型和版本号。否则手动填写：
+如果文件名符合 `板型-版本号.bin`，例如 `esplink-v1-1.0.3.bin`，页面还会自动填入目标板型和版本号。否则手动填写：
 
 ```text
 目标板型：esplink-v1
-版本号：1.0.1
+版本号：1.0.3
 渠道：stable
 启用：打开
 强制升级：按测试需要选择，默认关闭
@@ -136,7 +203,7 @@ Smallest app partition is 0x180000 bytes. 0x5d420 bytes (24%) free.
 点击 `确定` 后，后台会创建 firmware release。上传的固件会保存在：
 
 ```text
-/Users/wq/ai_deploy_backend/uploads/firmware/
+/Users/wq/EspLink/backend/uploads/firmware/
 ```
 
 并通过后端静态地址提供下载：
@@ -155,8 +222,8 @@ wc -c /Users/wq/EspLink/esplink-firmware/build/esp32s3_device.bin
 本次实测：
 
 ```text
-sha256     = 0c37779f93b3d44940ab9f0325d962396d0629c31613f5bb663edf154d5098e3
-size_bytes = 1190880
+sha256     = 475c032834fb9f92373c848ca999416018a11d10cad395874f75fc5648aae1bb
+size_bytes = 1261392
 ```
 
 验证后端可下载。把 `<filename>` 替换成页面返回的文件名：
@@ -171,7 +238,7 @@ curl --noproxy '*' -I \
 ```text
 HTTP/1.1 200 OK
 Content-Type: application/octet-stream
-Content-Length: 1190880
+Content-Length: 1261392
 ```
 
 ## 4. 创建 Firmware Release
@@ -194,7 +261,7 @@ ADMIN_TOKEN=$(curl --noproxy '*' -s \
 curl --noproxy '*' -s \
   -H 'Content-Type: application/octet-stream' \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-  -H 'X-Firmware-Filename: esplink-v1-1.0.1.bin' \
+  -H 'X-Firmware-Filename: esplink-v1-1.0.3.bin' \
   --data-binary @/Users/wq/EspLink/esplink-firmware/build/esp32s3_device.bin \
   http://192.168.1.26:8088/api/v1/firmware/artifacts
 ```
@@ -207,10 +274,10 @@ curl --noproxy '*' -s \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" \
   -d '{
     "board_type":"esplink-v1",
-    "version":"1.0.1",
-    "artifact_url":"http://192.168.1.26:8088/firmware/esplink-v1-1.0.1.bin",
-    "sha256":"0c37779f93b3d44940ab9f0325d962396d0629c31613f5bb663edf154d5098e3",
-    "size_bytes":1190880,
+    "version":"1.0.3",
+    "artifact_url":"http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin",
+    "sha256":"475c032834fb9f92373c848ca999416018a11d10cad395874f75fc5648aae1bb",
+    "size_bytes":1261392,
     "channel":"stable",
     "is_active":true,
     "force_update":false,
@@ -228,7 +295,7 @@ curl --noproxy '*' -s \
     "mac":"10:51:DB:80:E2:E8",
     "sn":"MAC-1051DB80E2E8",
     "board_type":"esplink-v1",
-    "firmware_version":"1.0.0"
+    "firmware_version":"1.0.2"
   }' \
   http://192.168.1.26:8088/api/ota/check
 ```
@@ -239,9 +306,9 @@ curl --noproxy '*' -s \
 {
   "update_available": true,
   "ota": {
-    "version": "1.0.1",
-    "url": "http://192.168.1.26:8088/firmware/esplink-v1-1.0.1.bin",
-    "size_bytes": 1190880,
+    "version": "1.0.3",
+    "url": "http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin",
+    "size_bytes": 1261392,
     "force": false
   }
 }
@@ -262,16 +329,16 @@ idf.py -p /dev/cu.usbmodem111301 monitor
 1. 设备以旧版本启动并上报：
 
 ```text
-main: === device boot: board=esplink-v1 fw=1.0.0 ===
-main: boot register: mac=10:51:DB:80:E2:E8 ... fw=1.0.0
+main: === device boot: board=esplink-v1 fw=1.0.2 ===
+main: boot register: mac=10:51:DB:80:E2:E8 ... fw=1.0.2
 ```
 
 2. 后端下发 OTA：
 
 ```text
 main: OTA available, upgrading...
-app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.1.bin
-app_ota: OTA target version=1.0.1 force=0 size=1190880
+app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin
+app_ota: OTA target version=1.0.3 force=0 size=1261392
 ```
 
 3. ESP-IDF 写入 OTA 分区：
@@ -286,7 +353,7 @@ app_ota: OTA success, restarting
 
 ```text
 boot: Loaded app from partition at offset 0x1a0000
-main: === device boot: board=esplink-v1 fw=1.0.1 ===
+main: === device boot: board=esplink-v1 fw=1.0.3 ===
 ```
 
 5. 设备重新上线：
@@ -315,7 +382,7 @@ curl --noproxy '*' -s \
     "mac":"10:51:DB:80:E2:E8",
     "sn":"MAC-1051DB80E2E8",
     "board_type":"esplink-v1",
-    "firmware_version":"1.0.1"
+    "firmware_version":"1.0.3"
   }' \
   http://192.168.1.26:8088/api/ota/check
 ```
@@ -332,7 +399,7 @@ curl --noproxy '*' -s \
 查询数据库设备记录：
 
 ```bash
-cd /Users/wq/ai_deploy_backend
+cd /Users/wq/EspLink/backend
 node -e 'require("dotenv").config(); const {PrismaClient}=require("@prisma/client"); const p=new PrismaClient(); p.device.findFirst({where:{mac_address:"10:51:DB:80:E2:E8"}, select:{mac_address:true, board_type:true, firmware:true, is_online:true, last_seen:true}}).then(d=>console.log(JSON.stringify(d,null,2))).finally(()=>p.$disconnect())'
 ```
 
@@ -342,7 +409,7 @@ node -e 'require("dotenv").config(); const {PrismaClient}=require("@prisma/clien
 {
   "mac_address": "10:51:DB:80:E2:E8",
   "board_type": "esplink-v1",
-  "firmware": "1.0.1",
+  "firmware": "1.0.3",
   "is_online": true
 }
 ```
@@ -377,7 +444,7 @@ The table `firmware_releases` does not exist in the current database.
 处理：
 
 ```bash
-cd /Users/wq/ai_deploy_backend
+cd /Users/wq/EspLink/backend
 npx prisma db push
 ```
 
@@ -390,7 +457,7 @@ npx prisma db push
 检查：
 
 ```bash
-curl --noproxy '*' -I http://192.168.1.26:8088/firmware/esplink-v1-1.0.1.bin
+curl --noproxy '*' -I http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin
 ```
 
 期望返回 `200 OK` 且 `Content-Length` 等于 release 的 `size_bytes`。
@@ -414,7 +481,20 @@ curl --noproxy '*' -I http://192.168.1.26:8088/firmware/esplink-v1-1.0.1.bin
 Warning: Checksum mismatch between flashed and built applications.
 ```
 
-原因：本地刚构建了 `1.0.1`，但设备启动时仍运行串口烧录过的 `1.0.0` factory 镜像。只要后续 OTA 写入成功并从 OTA 分区启动即可。
+原因：本地构建产物和设备当前运行分区不是同一个镜像。只要后续 OTA 写入成功并从 OTA 分区启动即可。
+
+### 设备启动成了其他项目固件
+
+现象：
+
+```text
+Project name: vibeboard_runtime
+Partition Table: only factory app
+```
+
+原因：同一块 ESP32-S3 被其他项目烧录过，分区表不包含 EspLink 的 OTA 分区。
+
+处理：先用 EspLink 固件执行 `idf.py -p <PORT> flash monitor`，确认分区表包含 `otadata/ota_0/ota_1`，再开始 OTA 验证。
 
 ## 收尾建议
 
