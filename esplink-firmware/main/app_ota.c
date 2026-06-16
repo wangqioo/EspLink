@@ -3,6 +3,8 @@
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
 #include "cJSON.h"
 #include <stdbool.h>
 #include <stdio.h>
@@ -53,6 +55,76 @@ static bool is_https_url(const char *url)
 static esp_http_client_transport_t transport_for_url(const char *url)
 {
     return is_http_url(url) ? HTTP_TRANSPORT_OVER_TCP : HTTP_TRANSPORT_OVER_SSL;
+}
+
+static bool is_hex_char(char ch)
+{
+    return (ch >= '0' && ch <= '9') ||
+           (ch >= 'a' && ch <= 'f') ||
+           (ch >= 'A' && ch <= 'F');
+}
+
+static bool valid_sha256_hex(const char *sha256)
+{
+    if (!sha256 || !sha256[0]) {
+        return true;
+    }
+
+    if (strlen(sha256) != 64) {
+        return false;
+    }
+
+    for (int i = 0; i < 64; i++) {
+        if (!is_hex_char(sha256[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void bytes_to_hex(const uint8_t *bytes, size_t len, char *out, size_t out_len)
+{
+    static const char hex[] = "0123456789abcdef";
+    if (out_len < (len * 2) + 1) {
+        if (out_len > 0) out[0] = '\0';
+        return;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        out[i * 2] = hex[(bytes[i] >> 4) & 0x0f];
+        out[i * 2 + 1] = hex[bytes[i] & 0x0f];
+    }
+    out[len * 2] = '\0';
+}
+
+static esp_err_t verify_boot_partition_sha256(const char *expected_sha256)
+{
+    if (!expected_sha256 || !expected_sha256[0]) {
+        return ESP_OK;
+    }
+
+    const esp_partition_t *partition = esp_ota_get_boot_partition();
+    if (!partition) {
+        ESP_LOGE(TAG, "unable to locate configured OTA boot partition for SHA256 verification");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    uint8_t digest[32];
+    esp_err_t err = esp_partition_get_sha256(partition, digest);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to read OTA partition SHA256: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    char actual[65];
+    bytes_to_hex(digest, sizeof(digest), actual, sizeof(actual));
+    if (strcasecmp(actual, expected_sha256) != 0) {
+        ESP_LOGE(TAG, "OTA SHA256 mismatch expected=%s actual=%s", expected_sha256, actual);
+        return ESP_ERR_INVALID_CRC;
+    }
+
+    ESP_LOGI(TAG, "OTA SHA256 verified %.16s...", actual);
+    return ESP_OK;
 }
 
 static void log_update_metadata(const app_ota_update_t *update)
@@ -161,6 +233,18 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (!valid_sha256_hex(update->sha256)) {
+        ESP_LOGE(TAG, "invalid OTA sha256 metadata");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+#if CONFIG_ESPLINK_PRODUCTION_TRANSPORT
+    if (!is_https_url(update->url)) {
+        ESP_LOGE(TAG, "production transport requires HTTPS OTA url: %s", update->url);
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif
+
     if (update->version && update->version[0] &&
         !update->force &&
         !version_newer(update->version, app_device_get_firmware_version())) {
@@ -181,6 +265,11 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
 
     esp_err_t err = esp_https_ota(&ota_cfg);
     if (err == ESP_OK) {
+        err = verify_boot_partition_sha256(update->sha256);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "OTA integrity verification failed: %s", esp_err_to_name(err));
+            return err;
+        }
         ESP_LOGI(TAG, "OTA success, restarting");
         esp_restart();
     } else {
