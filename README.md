@@ -69,11 +69,15 @@ EspLink/
 ```bash
 cd backend
 cp .env.example .env
+# 编辑 .env：DATABASE_URL、REDIS_HOST、JWT_SECRET、ADMIN_PASSWORD、WS_BASE_URL、PUBLIC_BASE_URL
 npm install
 npm run db:generate
 npm test
 npm run dev
 ```
+
+硬件联调时，`WS_BASE_URL` 和 `PUBLIC_BASE_URL` 必须使用 ESP32 能访问到的 Mac 局域网地址，例如
+`ws://192.168.1.26:8088` 和 `http://192.168.1.26:8088`。
 
 管理后台：
 
@@ -240,9 +244,9 @@ type = (subtype << 2) | frameType
 
 ### 近期目标
 
-- [ ] 生产设备 PSK 签名接入固件启动注册
-- [ ] 当前仓库 `.env`、数据库、Redis、前端和后端部署配置收口
-- [ ] OTA 下载 SHA256 严格校验
+- [x] 生产设备 PSK 签名接入固件启动注册
+- [x] 当前仓库 `.env`、数据库、Redis、前端和后端部署配置收口
+- [x] OTA 下载 SHA256 严格校验
 - [ ] 强制 OTA、错误 bin、下载中断、升级失败恢复回归测试
 - [ ] provision 页面输入框渲染 bug 修复
 - [ ] SSID 自动填充（`getCurrentWifiSSID()` 重新接入配网流程）

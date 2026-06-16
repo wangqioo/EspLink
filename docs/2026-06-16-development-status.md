@@ -9,7 +9,7 @@
 - 管理后台：`/Users/wq/EspLink/backend/admin-frontend`
 - 微信小程序：`/Users/wq/EspLink/esplink-app`
 - 固件：`/Users/wq/EspLink/esplink-firmware`
-- 旧后端：`/Users/wq/ai_deploy_backend` 只作为历史环境来源，本地验证时临时复用了其中 `.env`，业务代码已合入当前仓库。
+- 旧后端：`/Users/wq/ai_deploy_backend` 只作为历史环境来源，业务代码已合入当前仓库；本地验证应使用当前仓库的 `backend/.env.example` 创建 `.env`。
 
 本地实测网络：
 
@@ -109,15 +109,19 @@ WS device connected: 10:51:DB:80:E2:E8
 
 ### 后端
 
-当前仓库还没有提交真实 `.env`。本地验证临时复用旧后端环境变量：
-
 ```bash
 cd /Users/wq/EspLink/backend
-set -a
-source /Users/wq/ai_deploy_backend/.env
-set +a
-export WS_BASE_URL=ws://192.168.1.26:8088
-export PUBLIC_BASE_URL=http://192.168.1.26:8088
+cp .env.example .env
+
+# 编辑 .env：
+# DATABASE_URL="mysql://root:<db-password>@localhost:3306/xiaozhi"
+# REDIS_HOST=localhost
+# WS_BASE_URL=ws://192.168.1.26:8088
+# PUBLIC_BASE_URL=http://192.168.1.26:8088
+# REQUIRE_DEVICE_PSK=false
+
+npm install
+npm run db:generate
 npm start
 ```
 
@@ -201,10 +205,10 @@ API 路径：
 
 ### 必做
 
-- 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，但固件启动注册尚未携带 `timestamp`、`nonce`、`signature`。
+- 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
 - HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
-- Repo-local `.env` 流程：当前本地验证仍复用旧后端 `.env`，应整理当前仓库自己的 `.env`、`.env.example` 和部署配置。
-- OTA 完整性校验：后端返回 SHA256，固件当前只记录日志，生产前需要在设备端严格校验下载产物。
+- Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
+- OTA 完整性校验：后端返回 SHA256，固件已在 OTA 成功后校验目标启动分区 SHA256；仍需实机验证错误 SHA256 拒绝路径。
 
 ### 建议继续验证
 

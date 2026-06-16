@@ -180,15 +180,20 @@
 
 ```bash
 export PATH="/opt/homebrew/bin:$PATH"
-brew services start mysql && brew services start redis
+brew services start mysql
+brew services start redis
 cd /Users/wq/EspLink/backend
+cp .env.example .env
 
-# 当前仓库尚未提交真实 .env；本地验证临时复用旧后端 .env
-set -a
-source /Users/wq/ai_deploy_backend/.env
-set +a
-export WS_BASE_URL=ws://192.168.1.26:8088
-export PUBLIC_BASE_URL=http://192.168.1.26:8088
+# 编辑 .env：
+# DATABASE_URL="mysql://root:<db-password>@localhost:3306/xiaozhi"
+# REDIS_HOST=localhost
+# WS_BASE_URL=ws://192.168.1.26:8088
+# PUBLIC_BASE_URL=http://192.168.1.26:8088
+# REQUIRE_DEVICE_PSK=false
+
+npm install
+npm run db:generate
 npm start
 ```
 
