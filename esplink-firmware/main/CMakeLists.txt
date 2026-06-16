@@ -9,6 +9,7 @@ idf_component_register(
         "app_ota.c"
         "app_button.c"
         "app_cube_demo.c"
+        "app_boot_signing.c"
         "esp32_s3_szp.c"
     INCLUDE_DIRS "."
     REQUIRES
