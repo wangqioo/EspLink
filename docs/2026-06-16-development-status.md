@@ -213,10 +213,10 @@ API 路径：
 ### 建议继续验证
 
 - 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
-- 强制升级：`force_update=true`。
-- 错误 bin：上传非 ESP32-S3 app、空 bin、超大 bin。
-- 下载中断：后端中断、WiFi 断开、重启后恢复。
-- 回滚策略：OTA boot fail 后的恢复路径。
+- 强制升级：`force_update=true` 服务端决策已补自动化测试；仍需真机 OTA 执行验证。
+- 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
+- 下载中断：后端中断、WiFi 断开、重启后恢复，按 runbook 真机执行。
+- 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。
 - 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性。
 
 ### 体验优化

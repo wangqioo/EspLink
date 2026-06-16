@@ -111,6 +111,17 @@ device boot: board=esplink-v1 fw=<new-version>
 
 Publish a release with the same version and `force_update=true`.
 
+Automated coverage:
+
+```bash
+cd /Users/wq/EspLink/backend
+npm test -- otaCheckService.test.js --runInBand
+```
+
+The `returns forced update envelope when release version matches current firmware`
+case verifies that `/api/ota/check` still returns an OTA envelope when the
+release version equals the device version and `force_update=true`.
+
 Expected serial observations:
 
 ```text
@@ -132,6 +143,27 @@ fatal error, restarting in 5s
 
 Expected outcome: device does not boot the untrusted image.
 
+## 6.1 Invalid Firmware Uploads
+
+Automated coverage:
+
+```bash
+cd /Users/wq/EspLink/backend
+npm test -- firmwareRoutes.test.js --runInBand
+```
+
+Expected covered cases:
+
+- valid ESP image upload returns artifact metadata;
+- non-`.bin` filename is rejected;
+- empty `.bin` upload is rejected;
+- `.bin` whose first byte is not ESP image magic `0xE9` is rejected;
+- upload larger than `FIRMWARE_UPLOAD_MAX_BYTES` is rejected.
+
+The backend check is an upload guard, not a replacement for the bootloader.
+Wrong chip target, bad app descriptor, corrupted segment table, and boot fail
+rollback still require the hardware cases below.
+
 ## 7. Wrong Board Or Non-Newer Version
 
 Publish a release for another `board_type`, then publish an older version for
@@ -150,6 +182,14 @@ Expected outcome: no OTA starts.
 
 Start OTA and stop the backend while the device downloads the `.bin`.
 
+Suggested local steps:
+
+1. Start the backend with a release that points to a large valid `.bin`.
+2. Power-cycle or reset the device so boot registration returns the OTA envelope.
+3. Watch serial logs until `OTA target url=` appears.
+4. Stop the backend process before download completion.
+5. Leave the device running until it restarts and reports the previous firmware.
+
 Expected observations:
 
 ```text
@@ -158,6 +198,24 @@ fatal error, restarting in 5s
 ```
 
 Expected outcome: device reboots into the previous valid firmware.
+
+## 8.1 Boot Fail Recovery
+
+Publish an ESP image that passes upload and download checks but cannot boot the
+application successfully on the target hardware.
+
+Expected observations:
+
+```text
+OTA success, restarting
+bootloader selects new OTA partition
+application fails before confirming boot
+bootloader rolls back to previous partition
+device boot: board=esplink-v1 fw=<previous-version>
+```
+
+Expected outcome: device returns online on the previous valid firmware and
+does not remain stuck on the failed image.
 
 ## 9. Backend Restart And WebSocket Recovery
 

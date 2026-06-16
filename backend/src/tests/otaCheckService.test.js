@@ -203,6 +203,36 @@ describe('otaCheckService', () => {
     });
   });
 
+  test('returns forced update envelope when release version matches current firmware', async () => {
+    wechatService.bootRegister.mockResolvedValue({
+      device_key: 'device-token',
+      device: { board_type: 'esp32-s3-box', firmware: '2.5.0', wechat_user_id: null },
+    });
+    firmwareReleaseService.findLatestActiveRelease.mockResolvedValue({
+      version: '2.5.0',
+      artifact_url: 'https://firmware.example.test/esp32-force.bin',
+      sha256: 'b'.repeat(64),
+      size_bytes: 2048,
+      force_update: true,
+    });
+    const { checkBootReport } = require('../services/otaCheckService');
+
+    await expect(checkBootReport({
+      mac: 'AA:BB:CC:DD:EE:FF',
+      board_type: 'esp32-s3-box',
+      firmware_version: '2.5.0',
+    })).resolves.toMatchObject({
+      update_available: true,
+      ota: {
+        version: '2.5.0',
+        url: 'https://firmware.example.test/esp32-force.bin',
+        sha256: 'b'.repeat(64),
+        size_bytes: 2048,
+        force: true,
+      },
+    });
+  });
+
   test('returns no update when current firmware is unknown', async () => {
     wechatService.bootRegister.mockResolvedValue({
       device_key: 'device-token',

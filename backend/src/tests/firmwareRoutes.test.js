@@ -22,6 +22,12 @@ jest.mock('../services/firmwareReleaseService', () => ({
 
 const firmwareReleaseService = require('../services/firmwareReleaseService');
 
+function makeEspImage(size = 32) {
+  const buffer = Buffer.alloc(size, 0);
+  buffer[0] = 0xe9;
+  return buffer;
+}
+
 function makeApp() {
   const app = express();
   app.use(express.json());
@@ -147,7 +153,7 @@ describe('firmware admin routes', () => {
   });
 
   test('uploads firmware binaries and returns artifact metadata', async () => {
-    const payload = Buffer.from('firmware-binary');
+    const payload = makeEspImage();
 
     const res = await request(app)
       .post('/api/v1/firmware/artifacts')
@@ -173,7 +179,7 @@ describe('firmware admin routes', () => {
       .post('/api/v1/firmware/artifacts')
       .set('Content-Type', 'application/octet-stream')
       .set('X-Firmware-Filename', 'esplink-v1-1.0.3.bin')
-      .send(Buffer.from('firmware-binary'));
+      .send(makeEspImage());
 
     expect(res.status).toBe(201);
     expect(res.body.data.artifact_url).toBe('http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin');
@@ -190,6 +196,17 @@ describe('firmware admin routes', () => {
     expect(res.body.message).toBe('firmware filename must end with .bin');
   });
 
+  test('rejects bin uploads that are not ESP application images', async () => {
+    const res = await request(app)
+      .post('/api/v1/firmware/artifacts')
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-Firmware-Filename', 'not-esp.bin')
+      .send(Buffer.from('not an esp image'));
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('firmware artifact is not an ESP image');
+  });
+
   test('rejects empty firmware artifact uploads', async () => {
     const res = await request(app)
       .post('/api/v1/firmware/artifacts')
@@ -199,5 +216,19 @@ describe('firmware admin routes', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('firmware artifact is empty');
+  });
+
+  test('rejects firmware artifacts larger than the configured upload limit', async () => {
+    process.env.FIRMWARE_UPLOAD_MAX_BYTES = '16b';
+    const limitedApp = makeApp();
+
+    const res = await request(limitedApp)
+      .post('/api/v1/firmware/artifacts')
+      .set('Content-Type', 'application/octet-stream')
+      .set('X-Firmware-Filename', 'oversized.bin')
+      .send(Buffer.alloc(17, 0xe9));
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('firmware artifact exceeds max size');
   });
 });

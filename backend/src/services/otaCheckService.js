@@ -64,7 +64,7 @@ async function checkBootReport({ mac, board_type, firmware_version }) {
       channel: 'stable',
     });
 
-    if (!release || compareVersions(release.version, currentVersion) <= 0) {
+    if (!release || (!release.force_update && compareVersions(release.version, currentVersion) <= 0)) {
       return baseResponse;
     }
 

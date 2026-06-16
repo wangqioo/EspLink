@@ -3,6 +3,9 @@ const fs = require('fs');
 const path = require('path');
 
 const DEFAULT_UPLOAD_DIR = path.join(__dirname, '../../uploads/firmware');
+const DEFAULT_MAX_BYTES = 8 * 1024 * 1024;
+const ESP_IMAGE_HEADER_MAGIC = 0xe9;
+const ESP_IMAGE_HEADER_MIN_BYTES = 24;
 
 function serviceError(code, message) {
   const error = new Error(message);
@@ -12,6 +15,24 @@ function serviceError(code, message) {
 
 function getUploadDir() {
   return process.env.FIRMWARE_UPLOAD_DIR || DEFAULT_UPLOAD_DIR;
+}
+
+function parseMaxBytes(value) {
+  if (!value) {
+    return DEFAULT_MAX_BYTES;
+  }
+
+  const raw = String(value).trim().toLowerCase();
+  const match = raw.match(/^(\d+)(b|kb|mb)?$/);
+  if (!match) {
+    return DEFAULT_MAX_BYTES;
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2] || 'b';
+  if (unit === 'mb') return amount * 1024 * 1024;
+  if (unit === 'kb') return amount * 1024;
+  return amount;
 }
 
 function toHttpOrigin(wsBase) {
@@ -55,6 +76,15 @@ async function saveFirmwareArtifact({ filename, buffer }) {
     throw serviceError(40000, 'firmware artifact is empty');
   }
 
+  const maxBytes = parseMaxBytes(process.env.FIRMWARE_UPLOAD_MAX_BYTES);
+  if (buffer.length > maxBytes) {
+    throw serviceError(40000, 'firmware artifact exceeds max size');
+  }
+
+  if (buffer.length < ESP_IMAGE_HEADER_MIN_BYTES || buffer[0] !== ESP_IMAGE_HEADER_MAGIC) {
+    throw serviceError(40000, 'firmware artifact is not an ESP image');
+  }
+
   const uploadDir = getUploadDir();
   await fs.promises.mkdir(uploadDir, { recursive: true });
 
@@ -71,5 +101,6 @@ async function saveFirmwareArtifact({ filename, buffer }) {
 
 module.exports = {
   getUploadDir,
+  parseMaxBytes,
   saveFirmwareArtifact,
 };
