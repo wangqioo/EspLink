@@ -36,6 +36,7 @@
       <input
         class="form-input"
         type="text"
+        value="{{ssid}}"
         placeholder="输入WiFi名称"
         placeholder-style="color:#bbb;"
         bindinput="onSSIDInput"

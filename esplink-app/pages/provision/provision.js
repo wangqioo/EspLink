@@ -8,6 +8,7 @@ Page({
     deviceId:    '',
     deviceName:  '',
     step:        0,      // 0=连接中 1=填写信息 2=配网中
+    ssid:        '',
     showPassword: true,
     canSubmit:   false,
     sending:     false,
@@ -15,7 +16,7 @@ Page({
     errorMsg:    '',
   },
 
-  // 输入值不走 setData，避免原生 input 组件被框架重置
+  // 密码不走 setData，避免原生 input 组件被框架重置
   _ssid:           '',
   _password:       '',
   _blufi:          null,
@@ -34,7 +35,9 @@ Page({
   },
 
   _connect() {
-    this.setData({ step: 0, errorMsg: '' })
+    this._ssid = ''
+    this._password = ''
+    this.setData({ step: 0, ssid: '', canSubmit: false, errorMsg: '' })
     ble.connect(this.data.deviceId)
       .then(() => new Promise(r => setTimeout(r, 800)))
       .then(() => ble.getServices(this.data.deviceId))
@@ -43,6 +46,7 @@ Page({
         this._blufi = new BluFi(this.data.deviceId)
         this.setData({ step: 1 })
         this._blufi.subscribeNotify(result => this._onProvisionResult(result))
+        this._fillCurrentWifiSSID()
       })
       .catch(e => {
         this.setData({ errorMsg: e.message || '连接设备失败' })
@@ -51,7 +55,7 @@ Page({
 
   onSSIDInput(e) {
     this._ssid = e.detail.value
-    this.setData({ canSubmit: !!this._ssid && !!this._password })
+    this.setData({ ssid: this._ssid, canSubmit: !!this._ssid && !!this._password })
   },
 
   onPasswordInput(e) {
@@ -61,6 +65,15 @@ Page({
 
   togglePassword() {
     this.setData({ showPassword: !this.data.showPassword })
+  },
+
+  _fillCurrentWifiSSID() {
+    ble.getCurrentWifiSSID()
+      .then(ssid => {
+        if (!ssid || this._ssid) return
+        this._ssid = ssid
+        this.setData({ ssid, canSubmit: !!this._ssid && !!this._password })
+      })
   },
 
   onStartProvision() {

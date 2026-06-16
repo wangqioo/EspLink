@@ -219,7 +219,7 @@ type = (subtype << 2) | frameType
 | 问题 | 状态 | 说明 |
 |------|------|------|
 | provision 页面 WiFi 名称 / 密码输入框不显示内容 | 已修复待真机复测 | 已为原生 `<input>` 固定高度、行高、背景和块级布局，并增加静态回归测试；仍需在微信开发者工具和 iOS 真机复测 |
-| SSID 自动填充 | 暂停 | `getCurrentWifiSSID()` 已实现但从配网流程移除，等输入框真机复测通过后再加回 |
+| SSID 自动填充 | 已接入待真机复测 | 进入配网填写页后自动读取当前 WiFi SSID；读取失败或未授权时静默保留手动输入 |
 | 生产设备签名 | 已接入 | 固件 `/api/ota/check` 已支持 `timestamp/nonce/signature` HMAC-SHA256 启动签名 |
 | OTA SHA256 严格校验 | 已接入 | 固件 OTA 下载完成后校验 boot 分区 SHA256，不匹配则拒绝重启 |
 
@@ -249,7 +249,7 @@ type = (subtype << 2) | frameType
 - [x] OTA 下载 SHA256 严格校验
 - [ ] 强制 OTA、错误 bin、下载中断、升级失败恢复回归测试
 - [x] provision 页面输入框渲染 bug 修复（待真机复测）
-- [ ] SSID 自动填充（`getCurrentWifiSSID()` 重新接入配网流程）
+- [x] SSID 自动填充（待真机复测）
 - [ ] 多设备管理（小程序端支持已配网设备列表）
 - [ ] 配网二维码快速模式（无需蓝牙扫描）
 
