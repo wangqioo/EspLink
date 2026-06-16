@@ -107,6 +107,12 @@ OTA success, restarting
 device boot: board=esplink-v1 fw=<new-version>
 ```
 
+2026-06-17 hardware note: the backend `sha256` value is the raw uploaded
+`.bin` artifact digest. Firmware verification must compute SHA256 over the raw
+artifact bytes written to the target OTA partition, bounded by `size_bytes`.
+`esp_partition_get_sha256()` returns the ESP image digest and must not be used
+to compare with the backend artifact SHA256.
+
 ## 5. Forced OTA
 
 Publish a release with the same version and `force_update=true`.
@@ -129,6 +135,19 @@ OTA available, upgrading...
 OTA success, restarting
 ```
 
+2026-06-17 hardware finding: forced same-version OTA currently reaches the
+device, but firmware can fail before download with:
+
+```text
+ESP_ERR_OTA_ROLLBACK_INVALID_STATE
+Running app has not confirmed state (ESP_OTA_IMG_PENDING_VERIFY)
+```
+
+Required firmware fix: after a freshly OTA-booted app completes basic
+self-test, WiFi, and boot registration, call
+`esp_ota_mark_app_valid_cancel_rollback()`. Without that confirmation, IDF
+prevents the next OTA attempt from a pending-verify image.
+
 ## 6. Wrong SHA256
 
 Publish a release with a valid URL but an intentionally wrong 64-character SHA256.
@@ -142,6 +161,11 @@ fatal error, restarting in 5s
 ```
 
 Expected outcome: device does not boot the untrusted image.
+
+Before this case can be trusted, the normal OTA case must first pass with a
+correct backend artifact SHA256. A correct artifact must not be rejected because
+firmware compared it with the ESP image digest instead of the uploaded file
+digest.
 
 ## 6.1 Invalid Firmware Uploads
 
@@ -236,4 +260,6 @@ app_ws: WebSocket connected
 - Firmware builds with default development settings.
 - Firmware builds with production signing settings.
 - Signed boot succeeds with `REQUIRE_DEVICE_PSK=true`.
+- Correct OTA artifact SHA256 is accepted on hardware.
 - Wrong SHA256 is rejected on hardware.
+- OTA-booted firmware confirms itself valid before accepting a second OTA.

@@ -20,6 +20,31 @@
 - 设备 MAC：`10:51:DB:80:E2:E8`
 - 设备 IP：`192.168.1.32`
 
+## 2026-06-17 交接记录
+
+今天继续做生产化回归和真机 OTA 验证，后端、上传校验、小程序配网页面回归已经推进完成，真机强制 OTA 暴露了两个固件侧问题，明天优先修复。
+
+已完成：
+
+- 云端和本地已同步：`main` 与 `origin/main` 同步，最近提交已推送到 GitHub。
+- 后端 OTA 决策已补回归：`force_update=true` 时，即使目标版本等于当前版本也会返回 OTA envelope。
+- 后端固件上传已补防护和测试：拒绝非 `.bin`、空文件、首字节不是 ESP image magic `0xE9`、超过 `FIRMWARE_UPLOAD_MAX_BYTES` 的上传。
+- 微信小程序配网页面已补静态回归：输入框渲染稳定，SSID 自动填充重新接入配网流程。
+- 真机基础链路仍可跑通：ESP32-S3 能连接本地后端、完成启动注册、拿到 WebSocket token 并上线。
+
+真机强制 OTA 发现的问题：
+
+- OTA app 未确认有效：设备从 OTA 分区启动后没有调用 `esp_ota_mark_app_valid_cancel_rollback()`，再次 OTA 时会触发 `ESP_ERR_OTA_ROLLBACK_INVALID_STATE`。
+- SHA256 校验口径不一致：后端发布记录保存的是上传 `.bin` 文件 SHA256，固件当前使用 `esp_partition_get_sha256()` 得到的是 ESP image digest，两者不相等，导致正确 OTA 包被误判为 `OTA SHA256 mismatch`。
+
+明天继续：
+
+- 在固件中新增 OTA app valid 标记逻辑，建议在启动注册成功、设备确认可上线后调用。
+- 将固件 OTA SHA256 校验改为按 `size_bytes` 从目标启动分区读取原始 artifact bytes，并计算 raw SHA256，与后端发布记录保持同一口径。
+- 为上述两个约束补固件静态回归测试，随后重新构建固件。
+- 发布新的 `esplink-v1` OTA 测试版本，执行一次普通 OTA 和一次同版本 `force_update=true` OTA。
+- 测试结束后确认发布记录 `force_update=false`，避免设备反复升级。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -208,12 +233,13 @@ API 路径：
 - 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
 - HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
-- OTA 完整性校验：后端返回 SHA256，固件已在 OTA 成功后校验目标启动分区 SHA256；仍需实机验证错误 SHA256 拒绝路径。
+- OTA 完整性校验：后端返回上传 artifact 的 raw SHA256；固件当前实现仍需改为 raw artifact SHA256 校验，不能继续使用 `esp_partition_get_sha256()` 的 image digest。
+- OTA 回滚确认：固件需要在成功启动并完成启动注册后调用 `esp_ota_mark_app_valid_cancel_rollback()`，否则从 OTA 分区启动后的下一次 OTA 会被 IDF 回滚状态机拒绝。
 
 ### 建议继续验证
 
 - 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
-- 强制升级：`force_update=true` 服务端决策已补自动化测试；仍需真机 OTA 执行验证。
+- 强制升级：`force_update=true` 服务端决策已补自动化测试；真机执行已暴露固件回滚确认问题，需先修复再复测。
 - 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
 - 下载中断：后端中断、WiFi 断开、重启后恢复，按 runbook 真机执行。
 - 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。

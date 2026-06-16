@@ -51,6 +51,43 @@ is_active=1
 force_update=0
 ```
 
+## 2026-06-17 强制 OTA 回归记录
+
+后端 `force_update=true` 决策已通过自动化测试和真机请求验证：当发布版本等于设备当前版本时，`POST /api/ota/check` 仍会返回 OTA envelope，设备也会开始 OTA 流程。
+
+真机继续验证时发现两个固件侧问题，下一轮 OTA 回归前必须先修复：
+
+1. OTA 分区启动后未确认 app valid。
+
+   设备从 OTA 分区启动后，如果没有调用 `esp_ota_mark_app_valid_cancel_rollback()`，再次 OTA 会失败：
+
+   ```text
+   ESP_ERR_OTA_ROLLBACK_INVALID_STATE
+   Running app has not confirmed state (ESP_OTA_IMG_PENDING_VERIFY)
+   ```
+
+   修复建议：在启动注册成功、设备确认可联网并可连接后端后，标记当前 OTA app valid。
+
+2. SHA256 校验口径不一致。
+
+   后端发布记录中的 `sha256` 是上传 `.bin` 文件的原始 SHA256。固件当前使用 `esp_partition_get_sha256()` 读取的是 ESP image digest，不是上传文件 digest，正确 OTA 包会被误判：
+
+   ```text
+   OTA SHA256 mismatch expected=<backend artifact sha256> actual=<image digest>
+   OTA integrity verification failed
+   ```
+
+   修复建议：OTA 成功写入后，根据后端返回的 `size_bytes` 从目标启动分区读取同等长度的原始 bytes，计算 raw SHA256，再与后端 `sha256` 比较。
+
+下一轮验证顺序：
+
+1. 修复并构建新固件版本，例如 `1.0.4`。
+2. 发布新 OTA artifact，确认后端记录的 `sha256` 和 `size_bytes` 来自上传 `.bin`。
+3. 从旧版本设备执行普通 OTA，确认 correct SHA256 accepted。
+4. 将同版本发布短暂设置为 `force_update=true`，执行一次 forced OTA。
+5. 观察新 OTA app 启动后完成 boot register，并确认不会再出现 `ESP_ERR_OTA_ROLLBACK_INVALID_STATE`。
+6. 测试结束后把发布记录恢复为 `force_update=false`。
+
 ## 历史实测结论（2026-06-15）
 
 - 后端仓库：`/Users/wq/ai_deploy_backend`（历史路径）
