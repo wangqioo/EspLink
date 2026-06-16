@@ -18,6 +18,7 @@
 #include "app_ota.h"
 #include "app_button.h"
 #include "app_cube_demo.h"
+#include "app_boot_signing.h"
 #include "board_config.h"
 
 #if CONFIG_ESPLINK_TEST_AUTO_WIFI
@@ -245,6 +246,32 @@ static void boot_register_task(void *arg)
              "\"board_type\":\"%s\",\"firmware_version\":\"%s\"}",
              app_device_get_mac_str(), app_device_get_sn(),
              BOARD_TYPE, BOARD_FIRMWARE_VERSION);
+
+    app_boot_signature_t signature;
+    char nonce[32] = {0};
+    char signature_hex[65] = {0};
+    esp_err_t sign_err = app_boot_signing_build(&signature,
+                                                nonce,
+                                                sizeof(nonce),
+                                                signature_hex,
+                                                sizeof(signature_hex));
+    if (sign_err == ESP_OK) {
+        sign_err = app_boot_signing_append_json(body, sizeof(body), &signature);
+        if (sign_err != ESP_OK) {
+            ESP_LOGE(TAG, "failed to append boot signature: %s", esp_err_to_name(sign_err));
+            set_state(STATE_FATAL_ERROR);
+            vTaskDelete(NULL);
+            return;
+        }
+        ESP_LOGI(TAG, "boot register signature enabled nonce=%s", nonce);
+    } else if (sign_err == ESP_ERR_NOT_FOUND) {
+        ESP_LOGW(TAG, "boot register signature disabled for development");
+    } else {
+        ESP_LOGE(TAG, "boot register signature failed: %s", esp_err_to_name(sign_err));
+        set_state(STATE_FATAL_ERROR);
+        vTaskDelete(NULL);
+        return;
+    }
 
     memset(s_reg_resp, 0, sizeof(s_reg_resp));
     s_reg_resp_len = 0;
