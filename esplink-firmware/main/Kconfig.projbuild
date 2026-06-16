@@ -7,6 +7,31 @@ config ESPLINK_BOOT_REGISTER_URL
         Endpoint called after WiFi connects. The response provides the
         WebSocket URL, device token, binding state, and optional OTA decision.
 
+config ESPLINK_BOOT_PSK
+    string "Boot registration PSK"
+    default ""
+    help
+        Optional pre-shared key used to sign POST /api/ota/check. Leave empty
+        for development servers where REQUIRE_DEVICE_PSK is not true. Production
+        validation must configure this to the same secret stored in the backend
+        production_keys.psk_encrypted field for this device.
+
+config ESPLINK_BOOT_SIGNATURE_REQUIRED
+    bool "Require signed boot registration"
+    default n
+    help
+        When enabled, firmware refuses to call the boot registration endpoint
+        unless ESPLINK_BOOT_PSK is configured. This is intended for production
+        builds and production-readiness validation.
+
+config ESPLINK_PRODUCTION_TRANSPORT
+    bool "Require production transport settings"
+    default n
+    help
+        When enabled, firmware treats plain HTTP boot registration and OTA URLs
+        as invalid. Use this with HTTPS/WSS deployment and certificate
+        verification before shipping devices.
+
 config ESPLINK_TEST_AUTO_WIFI
     bool "Enable local test WiFi injection"
     default n
