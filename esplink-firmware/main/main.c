@@ -211,7 +211,7 @@ static void apply_test_auto_wifi(void)
 
 // ---------- 启动注册（合并激活 + OTA 检查） ----------
 
-static char s_reg_resp[512];
+static char s_reg_resp[2048];
 static int  s_reg_resp_len;
 
 static esp_err_t reg_http_event(esp_http_client_event_t *evt)

@@ -55,7 +55,7 @@ force_update=0
 
 后端 `force_update=true` 决策已通过自动化测试和真机请求验证：当发布版本等于设备当前版本时，`POST /api/ota/check` 仍会返回 OTA envelope，设备也会开始 OTA 流程。
 
-真机继续验证时发现两个固件侧问题，下一轮 OTA 回归前必须先修复：
+真机继续验证时发现两个固件侧问题，已在固件 `1.0.4` 回归中修复：
 
 1. OTA 分区启动后未确认 app valid。
 
@@ -66,7 +66,7 @@ force_update=0
    Running app has not confirmed state (ESP_OTA_IMG_PENDING_VERIFY)
    ```
 
-   修复建议：在启动注册成功、设备确认可联网并可连接后端后，标记当前 OTA app valid。
+   修复结果：启动注册 HTTP 成功且响应 JSON 可解析后，先调用 `app_ota_mark_running_valid()`，再处理服务端返回的 OTA envelope。
 
 2. SHA256 校验口径不一致。
 
@@ -77,16 +77,38 @@ force_update=0
    OTA integrity verification failed
    ```
 
-   修复建议：OTA 成功写入后，根据后端返回的 `size_bytes` 从目标启动分区读取同等长度的原始 bytes，计算 raw SHA256，再与后端 `sha256` 比较。
+   修复结果：OTA 成功写入后，根据后端返回的 `size_bytes` 从目标启动分区读取同等长度的原始 bytes，计算 raw SHA256，再与后端 `sha256` 比较。
 
-下一轮验证顺序：
+最终验证结果：
 
-1. 修复并构建新固件版本，例如 `1.0.4`。
-2. 发布新 OTA artifact，确认后端记录的 `sha256` 和 `size_bytes` 来自上传 `.bin`。
-3. 从旧版本设备执行普通 OTA，确认 correct SHA256 accepted。
-4. 将同版本发布短暂设置为 `force_update=true`，执行一次 forced OTA。
-5. 观察新 OTA app 启动后完成 boot register，并确认不会再出现 `ESP_ERR_OTA_ROLLBACK_INVALID_STATE`。
-6. 测试结束后把发布记录恢复为 `force_update=false`。
+- 设备串口：`/dev/cu.usbmodem112301`
+- 起始固件版本：临时测试构建 `1.0.3`
+- OTA 目标版本：`1.0.4`
+- OTA artifact：`http://192.168.1.26:8088/firmware/esplink-v1-1.0.4.bin`
+- SHA256：`d4cf96af27893672d138e640b51c238dab62110453f4df26cce0e90400ec20bb`
+- 大小：`1265440` bytes
+- 普通 OTA：通过，`1.0.3 -> 1.0.4`
+- 同版本 forced OTA：通过，`1.0.4 -> 1.0.4`
+- 测试结束状态：`force_update=false`，设备启动注册成功并通过 WebSocket 上线。
+
+关键串口日志：
+
+```text
+main: === device boot: board=esplink-v1 fw=1.0.4 ===
+main: OTA available, upgrading...
+app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.4.bin
+app_ota: OTA target version=1.0.4 force=1 size=1265440
+app_ota: OTA target sha256 d4cf96af27893672...
+esp_https_ota: Writing to <ota_1> partition at offset 0x320000
+app_ota: OTA artifact SHA256 verified d4cf96af27893672...
+app_ota: OTA success, restarting
+boot: Loaded app from partition at offset 0x320000
+main: === device boot: board=esplink-v1 fw=1.0.4 ===
+app_ota: OTA app marked valid
+main: boot register ok, is_bound=1
+app_ws: WebSocket connected
+main: hello_ack: is_bound=1
+```
 
 ## 历史实测结论（2026-06-15）
 

@@ -27,6 +27,14 @@ test('OTA app is marked valid before applying a boot-register OTA envelope', () 
   assert.ok(markIndex < upgradeIndex);
 });
 
+test('boot registration response buffer can hold an OTA envelope', () => {
+  const mainC = readMain('main.c');
+  const match = mainC.match(/static char\s+s_reg_resp\[(\d+)\]/);
+
+  assert.ok(match);
+  assert.ok(Number(match[1]) >= 2048);
+});
+
 test('OTA SHA256 verification compares backend artifact SHA over raw partition bytes', () => {
   const appOtaC = readMain('app_ota.c');
 

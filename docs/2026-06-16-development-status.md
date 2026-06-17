@@ -16,7 +16,7 @@
 - Mac 局域网 IP：`192.168.1.26`
 - 后端 HTTP：`http://192.168.1.26:8088`
 - 设备 WebSocket：`ws://192.168.1.26:8088/ws/device`
-- ESP32-S3 串口：`/dev/cu.usbmodem111301`
+- ESP32-S3 串口：`/dev/cu.usbmodem112301`
 - 设备 MAC：`10:51:DB:80:E2:E8`
 - 设备 IP：`192.168.1.32`
 
@@ -56,7 +56,7 @@
 - 新增固件源码契约测试：覆盖 OTA valid 标记、valid-before-OTA 顺序、raw artifact SHA256 校验口径。
 - 本地后端已准备 `esplink-v1 / 1.0.4` 发布记录：
   - URL：`http://192.168.1.26:8088/firmware/esplink-v1-1.0.4.bin`
-  - SHA256：`bb9ea7011f635d7894f2f6dfa0b0afc478156579e0fee17f502be3dc778e0cfd`
+  - SHA256：`d4cf96af27893672d138e640b51c238dab62110453f4df26cce0e90400ec20bb`
   - 大小：`1265440` bytes
   - `force_update=false`
 
@@ -66,7 +66,7 @@
 node --test esplink-firmware/tests/otaContract.test.js
 ```
 
-结果：3 个测试全部通过。
+结果：4 个测试全部通过。
 
 ```bash
 cd esplink-firmware
@@ -83,25 +83,30 @@ npm test -- otaCheckService.test.js firmwareRoutes.test.js --runInBand
 
 结果：2 个 suite、23 个测试全部通过。沙箱内会因 supertest 监听本地端口报 `EPERM`，需要在非沙箱环境运行。
 
-真机状态：
+真机回归结果：
 
-- 后端 ready，`1.0.4` artifact 可通过 LAN URL 下载。
-- 当前可见串口：`/dev/cu.usbmodem11301`。
-- 本次尝试 `esptool` 写入 `ota_data_initial.bin` 时，串口存在但芯片无响应：
+- 正确 ESP32-S3 串口为 `/dev/cu.usbmodem112301`；`/dev/cu.usbmodem11301` 是非目标 CDC ACM 端口。
+- 普通 OTA 已通过：临时刷入 `fw=1.0.3` 后，设备从后端获取 `1.0.4` OTA envelope，下载新 artifact，校验 raw SHA256 `d4cf96af27893672...`，写入 `ota_0` 并重启到 `fw=1.0.4`。
+- 同版本强制 OTA 已通过：短暂设置发布记录 `force_update=true` 后，运行中的 `fw=1.0.4` 设备仍获取 OTA envelope，写入另一 OTA 分区，校验同一 raw SHA256 并重启成功。
+- OTA app valid 已验证：新 OTA app 启动后输出 `app_ota: OTA app marked valid`，随后启动注册成功并连接 WebSocket。
+- 测试结束后发布记录已恢复 `force_update=false`，设备最终停在正常在线状态。
+
+关键串口日志：
 
 ```text
-Failed to connect to ESP32-S3: No serial data received
+main: OTA available, upgrading...
+app_ota: OTA target version=1.0.4 force=1 size=1265440
+app_ota: OTA target sha256 d4cf96af27893672...
+esp_https_ota: Writing to <ota_1> partition at offset 0x320000
+app_ota: OTA artifact SHA256 verified d4cf96af27893672...
+app_ota: OTA success, restarting
+boot: Loaded app from partition at offset 0x320000
+main: === device boot: board=esplink-v1 fw=1.0.4 ===
+app_ota: OTA app marked valid
+main: boot register ok, is_bound=1
+app_ws: WebSocket connected
+main: hello_ack: is_bound=1
 ```
-
-- `idf.py monitor` 可以打开端口，但未收到启动日志；数据库中设备 `10:51:DB:80:E2:E8` 仍停留在 `firmware=1.0.3`、`is_online=false`。
-
-下一步：
-
-- 手动按板子 reset/boot 或重新插拔 USB，让 esptool 能重新握手。
-- 重置 OTA data 到 factory，或直接刷入当前 `1.0.4` 固件后观察启动注册。
-- 执行普通 OTA 到 `1.0.4`，确认串口出现 `OTA artifact SHA256 verified` 和 `OTA app marked valid`。
-- 再短暂设置 `1.0.4 force_update=true`，执行同版本 forced OTA，确认不再出现 `ESP_ERR_OTA_ROLLBACK_INVALID_STATE`。
-- 测试结束后恢复 `force_update=false`，停止本地后端。
 
 ## 已验证主链路
 
