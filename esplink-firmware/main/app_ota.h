@@ -18,6 +18,9 @@ esp_err_t app_ota_check_and_upgrade(const char *check_url);
 // 成功时内部调用 esp_restart()，失败返回错误码。
 esp_err_t app_ota_upgrade(const app_ota_update_t *update);
 
+// OTA 分区启动并完成自检后，确认当前 app 有效，允许后续 OTA。
+esp_err_t app_ota_mark_running_valid(void);
+
 // 新接口：由启动注册响应或云端推送直接给出 fw_url，跳过版本检查直接刷写
 // 成功时内部调用 esp_restart()，失败返回错误码
 esp_err_t app_ota_upgrade_from_url(const char *fw_url);

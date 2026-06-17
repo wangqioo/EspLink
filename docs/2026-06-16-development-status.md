@@ -45,6 +45,64 @@
 - 发布新的 `esplink-v1` OTA 测试版本，执行一次普通 OTA 和一次同版本 `force_update=true` OTA。
 - 测试结束后确认发布记录 `force_update=false`，避免设备反复升级。
 
+## 2026-06-17 继续开发记录
+
+已完成：
+
+- 固件 OTA app valid 确认已实现：新增 `app_ota_mark_running_valid()`，当前 OTA app 处于 `ESP_OTA_IMG_PENDING_VERIFY` 时调用 `esp_ota_mark_app_valid_cancel_rollback()`。
+- 启动注册流程已调整：启动注册 HTTP 成功且响应 JSON 可解析后，先确认当前 OTA app valid，再处理服务端返回的 OTA envelope，避免同版本强制 OTA 在 pending verify 状态下被 IDF 拒绝。
+- 固件 OTA SHA256 校验已改为后端 artifact 口径：按 `size_bytes` 从目标启动分区读取原始 bytes，用 mbedTLS SHA256 计算 digest，再与后端发布记录的上传 `.bin` SHA256 对比。
+- 固件版本已升到 `1.0.4`，用于下一轮 OTA 回归。
+- 新增固件源码契约测试：覆盖 OTA valid 标记、valid-before-OTA 顺序、raw artifact SHA256 校验口径。
+- 本地后端已准备 `esplink-v1 / 1.0.4` 发布记录：
+  - URL：`http://192.168.1.26:8088/firmware/esplink-v1-1.0.4.bin`
+  - SHA256：`bb9ea7011f635d7894f2f6dfa0b0afc478156579e0fee17f502be3dc778e0cfd`
+  - 大小：`1265440` bytes
+  - `force_update=false`
+
+已验证：
+
+```bash
+node --test esplink-firmware/tests/otaContract.test.js
+```
+
+结果：3 个测试全部通过。
+
+```bash
+cd esplink-firmware
+source /Users/wq/esp-idf/export.sh
+idf.py build
+```
+
+结果：构建通过，`esp32s3_device.bin` 大小 `0x134f20`，OTA 分区剩余 `0x4b0e0` bytes。
+
+```bash
+cd backend
+npm test -- otaCheckService.test.js firmwareRoutes.test.js --runInBand
+```
+
+结果：2 个 suite、23 个测试全部通过。沙箱内会因 supertest 监听本地端口报 `EPERM`，需要在非沙箱环境运行。
+
+真机状态：
+
+- 后端 ready，`1.0.4` artifact 可通过 LAN URL 下载。
+- 当前可见串口：`/dev/cu.usbmodem11301`。
+- 本次尝试 `esptool` 写入 `ota_data_initial.bin` 时，串口存在但芯片无响应：
+
+```text
+Failed to connect to ESP32-S3: No serial data received
+```
+
+- `idf.py monitor` 可以打开端口，但未收到启动日志；数据库中设备 `10:51:DB:80:E2:E8` 仍停留在 `firmware=1.0.3`、`is_online=false`。
+
+下一步：
+
+- 手动按板子 reset/boot 或重新插拔 USB，让 esptool 能重新握手。
+- 重置 OTA data 到 factory，或直接刷入当前 `1.0.4` 固件后观察启动注册。
+- 执行普通 OTA 到 `1.0.4`，确认串口出现 `OTA artifact SHA256 verified` 和 `OTA app marked valid`。
+- 再短暂设置 `1.0.4 force_update=true`，执行同版本 forced OTA，确认不再出现 `ESP_ERR_OTA_ROLLBACK_INVALID_STATE`。
+- 测试结束后恢复 `force_update=false`，停止本地后端。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -233,8 +291,8 @@ API 路径：
 - 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
 - HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
-- OTA 完整性校验：后端返回上传 artifact 的 raw SHA256；固件当前实现仍需改为 raw artifact SHA256 校验，不能继续使用 `esp_partition_get_sha256()` 的 image digest。
-- OTA 回滚确认：固件需要在成功启动并完成启动注册后调用 `esp_ota_mark_app_valid_cancel_rollback()`，否则从 OTA 分区启动后的下一次 OTA 会被 IDF 回滚状态机拒绝。
+- OTA 完整性校验：固件已改为 raw artifact SHA256 校验；仍需真机确认正确 SHA256 接受、错误 SHA256 拒绝。
+- OTA 回滚确认：固件已在启动注册成功后、处理 OTA envelope 前调用 `esp_ota_mark_app_valid_cancel_rollback()`；仍需真机 forced OTA 复测。
 
 ### 建议继续验证
 

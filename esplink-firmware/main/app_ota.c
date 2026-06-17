@@ -6,6 +6,7 @@
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
 #include "cJSON.h"
+#include "mbedtls/sha256.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +14,7 @@
 
 #define TAG          "app_ota"
 #define RESP_BUF_LEN 1024
+#define SHA_READ_CHUNK 4096
 
 static char s_resp_buf[RESP_BUF_LEN];
 static int  s_resp_len;
@@ -97,10 +99,47 @@ static void bytes_to_hex(const uint8_t *bytes, size_t len, char *out, size_t out
     out[len * 2] = '\0';
 }
 
-static esp_err_t verify_boot_partition_sha256(const char *expected_sha256)
+esp_err_t app_ota_mark_running_valid(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) {
+        ESP_LOGE(TAG, "unable to locate running partition for OTA validation");
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    esp_ota_img_states_t state;
+    esp_err_t err = esp_ota_get_state_partition(running, &state);
+    if (err == ESP_ERR_NOT_SUPPORTED || err == ESP_ERR_NOT_FOUND) {
+        return ESP_OK;
+    }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to read running OTA state: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    if (state != ESP_OTA_IMG_PENDING_VERIFY) {
+        return ESP_OK;
+    }
+
+    err = esp_ota_mark_app_valid_cancel_rollback();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to mark OTA app valid: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "OTA app marked valid");
+    return ESP_OK;
+}
+
+static esp_err_t verify_boot_partition_artifact_sha256(const char *expected_sha256, int size_bytes)
 {
     if (!expected_sha256 || !expected_sha256[0]) {
         return ESP_OK;
+    }
+
+    if (size_bytes <= 0) {
+        ESP_LOGE(TAG, "OTA sha256 metadata requires positive size_bytes");
+        return ESP_ERR_INVALID_ARG;
     }
 
     const esp_partition_t *partition = esp_ota_get_boot_partition();
@@ -109,22 +148,69 @@ static esp_err_t verify_boot_partition_sha256(const char *expected_sha256)
         return ESP_ERR_NOT_FOUND;
     }
 
+    if ((size_t)size_bytes > partition->size) {
+        ESP_LOGE(TAG, "OTA size %d exceeds boot partition size %u",
+                 size_bytes,
+                 (unsigned int)partition->size);
+        return ESP_ERR_INVALID_SIZE;
+    }
+
+    uint8_t *buf = malloc(SHA_READ_CHUNK);
+    if (!buf) {
+        return ESP_ERR_NO_MEM;
+    }
+
     uint8_t digest[32];
-    esp_err_t err = esp_partition_get_sha256(partition, digest);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "failed to read OTA partition SHA256: %s", esp_err_to_name(err));
-        return err;
+    mbedtls_sha256_context ctx;
+    mbedtls_sha256_init(&ctx);
+
+    int rc = mbedtls_sha256_starts(&ctx, 0);
+    esp_err_t err = ESP_OK;
+    if (rc != 0) {
+        err = ESP_FAIL;
+        goto cleanup;
+    }
+
+    size_t remaining = (size_t)size_bytes;
+    size_t offset = 0;
+    while (remaining > 0) {
+        size_t to_read = remaining > SHA_READ_CHUNK ? SHA_READ_CHUNK : remaining;
+        err = esp_partition_read(partition, offset, buf, to_read);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "failed to read OTA partition bytes: %s", esp_err_to_name(err));
+            goto cleanup;
+        }
+
+        rc = mbedtls_sha256_update(&ctx, buf, to_read);
+        if (rc != 0) {
+            err = ESP_FAIL;
+            goto cleanup;
+        }
+
+        offset += to_read;
+        remaining -= to_read;
+    }
+
+    rc = mbedtls_sha256_finish(&ctx, digest);
+    if (rc != 0) {
+        err = ESP_FAIL;
+        goto cleanup;
     }
 
     char actual[65];
     bytes_to_hex(digest, sizeof(digest), actual, sizeof(actual));
     if (strcasecmp(actual, expected_sha256) != 0) {
         ESP_LOGE(TAG, "OTA SHA256 mismatch expected=%s actual=%s", expected_sha256, actual);
-        return ESP_ERR_INVALID_CRC;
+        err = ESP_ERR_INVALID_CRC;
+        goto cleanup;
     }
 
-    ESP_LOGI(TAG, "OTA SHA256 verified %.16s...", actual);
-    return ESP_OK;
+    ESP_LOGI(TAG, "OTA artifact SHA256 verified %.16s...", actual);
+
+cleanup:
+    mbedtls_sha256_free(&ctx);
+    free(buf);
+    return err;
 }
 
 static void log_update_metadata(const app_ota_update_t *update)
@@ -238,6 +324,11 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         return ESP_ERR_INVALID_ARG;
     }
 
+    if (update->sha256 && update->sha256[0] && update->size_bytes <= 0) {
+        ESP_LOGE(TAG, "OTA sha256 metadata missing positive size_bytes");
+        return ESP_ERR_INVALID_ARG;
+    }
+
 #if CONFIG_ESPLINK_PRODUCTION_TRANSPORT
     if (!is_https_url(update->url)) {
         ESP_LOGE(TAG, "production transport requires HTTPS OTA url: %s", update->url);
@@ -265,7 +356,7 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
 
     esp_err_t err = esp_https_ota(&ota_cfg);
     if (err == ESP_OK) {
-        err = verify_boot_partition_sha256(update->sha256);
+        err = verify_boot_partition_artifact_sha256(update->sha256, update->size_bytes);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "OTA integrity verification failed: %s", esp_err_to_name(err));
             return err;

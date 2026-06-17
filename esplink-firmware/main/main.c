@@ -306,6 +306,15 @@ static void boot_register_task(void *arg)
         return;
     }
 
+    esp_err_t valid_err = app_ota_mark_running_valid();
+    if (valid_err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to mark OTA app valid: %s", esp_err_to_name(valid_err));
+        cJSON_Delete(root);
+        set_state(STATE_FATAL_ERROR);
+        vTaskDelete(NULL);
+        return;
+    }
+
     // 1. 服务端如果在响应里包含 ota 对象，说明有固件更新，优先处理
     cJSON *ota_obj = cJSON_GetObjectItem(root, "ota");
     app_ota_update_t update;
