@@ -739,7 +739,7 @@ Firmware:
 cd /Users/wq/EspLink/esplink-firmware
 source /Users/wq/esp-idf/export.sh
 idf.py build
-idf.py -p /dev/cu.usbmodem111301 flash monitor
+idf.py -p /dev/cu.usbmodem112301 flash monitor
 ```
 
 Expected serial observations:
@@ -813,7 +813,7 @@ Expected serial observations:
 ```text
 OTA available, upgrading...
 OTA target sha256
-OTA SHA256 verified
+OTA artifact SHA256 verified
 OTA success, restarting
 device boot: board=esplink-v1 fw=<new-version>
 ```

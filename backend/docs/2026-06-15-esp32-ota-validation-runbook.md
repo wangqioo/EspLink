@@ -2,31 +2,31 @@
 
 本文记录 `ai_deploy_backend` + `EspLink` 的本地 OTA 实机验证流程。目标是验证 ESP32 设备可以从后端获取固件发布信息，下载 OTA 包，写入 OTA 分区，重启后切换到新版本并重新上线。
 
-## 最新实测结论（2026-06-16）
+## 最新实测结论（2026-06-17）
 
 - 后端仓库：`/Users/wq/EspLink/backend`
 - 固件仓库：`/Users/wq/EspLink/esplink-firmware`
 - 后端地址：`http://192.168.1.26:8088`
 - WebSocket 地址：`ws://192.168.1.26:8088/ws/device`
-- 设备串口：`/dev/cu.usbmodem111301`
+- 设备串口：`/dev/cu.usbmodem112301`
 - 设备 MAC：`10:51:DB:80:E2:E8`
 - 设备 IP：`192.168.1.32`
-- 起始固件版本：`1.0.2`
-- OTA 目标版本：`1.0.3`
-- OTA 写入分区：`ota_0`
-- OTA 结果：成功，重启后从 `0x1a0000` 启动并上报 `fw=1.0.3`
+- 起始固件版本：临时测试构建 `1.0.3`
+- OTA 目标版本：`1.0.4`
+- OTA 结果：普通 OTA 和同版本 forced OTA 均成功，最终上报 `fw=1.0.4` 并 WebSocket 在线。
+- OTA artifact SHA256：`d4cf96af27893672d138e640b51c238dab62110453f4df26cce0e90400ec20bb`
 
 实测关键日志：
 
 ```text
-main: === device boot: board=esplink-v1 fw=1.0.2 ===
+main: === device boot: board=esplink-v1 fw=1.0.4 ===
 main: OTA available, upgrading...
-app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.3.bin
-app_ota: OTA target version=1.0.3 force=0 size=1261392
-esp_https_ota: Writing to <ota_0> partition at offset 0x1a0000
+app_ota: OTA target url=http://192.168.1.26:8088/firmware/esplink-v1-1.0.4.bin
+app_ota: OTA target version=1.0.4 force=1 size=1265440
+app_ota: OTA artifact SHA256 verified d4cf96af27893672...
 app_ota: OTA success, restarting
-boot: Loaded app from partition at offset 0x1a0000
-main: === device boot: board=esplink-v1 fw=1.0.3 ===
+main: === device boot: board=esplink-v1 fw=1.0.4 ===
+app_ota: OTA app marked valid
 main: boot register ok, is_bound=1
 app_ws: WebSocket connected
 main: hello_ack: is_bound=1
@@ -36,17 +36,17 @@ main: hello_ack: is_bound=1
 
 ```text
 mac_address  board_type   firmware  is_online  last_seen
-10:51:DB:80:E2:E8  esplink-v1  1.0.3  1  2026-06-16 01:01:01
+10:51:DB:80:E2:E8  esplink-v1  1.0.4  1
 ```
 
 后端发布记录：
 
 ```text
-id=3
+id=4
 board_type=esplink-v1
-version=1.0.3
-size_bytes=1261392
-sha256=475c032834fb9f92373c848ca999416018a11d10cad395874f75fc5648aae1bb
+version=1.0.4
+size_bytes=1265440
+sha256=d4cf96af27893672d138e640b51c238dab62110453f4df26cce0e90400ec20bb
 is_active=1
 force_update=0
 ```
@@ -380,7 +380,7 @@ curl --noproxy '*' -s \
 ```bash
 cd /Users/wq/EspLink/esplink-firmware
 source /Users/wq/esp-idf/export.sh
-idf.py -p /dev/cu.usbmodem111301 monitor
+idf.py -p /dev/cu.usbmodem112301 monitor
 ```
 
 观察以下阶段：

@@ -108,6 +108,59 @@ app_ws: WebSocket connected
 main: hello_ack: is_bound=1
 ```
 
+## 2026-06-18 交接与明日开发计划
+
+当前状态：
+
+- 云端和本地已同步：`main` 与 `origin/main` 同步，最新提交包含固件 OTA valid、raw SHA256 校验、注册响应缓冲区扩容、OTA 回归文档更新。
+- 真机 OTA 主链路已闭环：普通 OTA 和同版本 `force_update=true` OTA 都已通过，设备最终运行 `fw=1.0.4` 并正常 WebSocket 上线。
+- 本地 OTA 发布记录 `esplink-v1 / 1.0.4` 已恢复 `force_update=false`，避免设备反复升级。
+- 本地后端验证结束后已停止，`8088` 端口不应被继续占用。
+
+明日优先级：
+
+1. OTA 结果上报闭环。
+   - 固件在 OTA 开始、下载失败、SHA mismatch、写入成功、重启前上报事件。
+   - 后端新增 OTA attempt/result 记录，至少能按设备、版本、release id 查询最近一次 OTA 状态。
+   - 管理端固件发布详情页展示成功/失败次数和最近失败原因。
+
+2. 管理后台设备视图完善。
+   - 设备列表展示 `firmware`、`board_type`、在线状态、最近心跳、绑定用户。
+   - 设备详情页展示 capability、最近 WebSocket 连接、最近 OTA 记录。
+   - 为强制升级增加明显确认，避免误开 `force_update=true` 后造成循环升级。
+
+3. 微信小程序设备状态页。
+   - 展示设备在线/离线、固件版本、板型、最近上线时间。
+   - 配网页面继续保持当前稳定输入框回归，新增配网失败提示和重试入口。
+   - 不在小程序暴露 OTA 管理权限，只展示只读状态。
+
+4. 生产签名模式回归。
+   - 使用 `REQUIRE_DEVICE_PSK=true` 和固件 `CONFIG_ESPLINK_BOOT_SIGNATURE_REQUIRED=y` 做一次真机 signed boot。
+   - 覆盖错误 PSK、过期 timestamp、nonce replay 三类失败路径。
+   - 将签名模式的本地准备步骤补进 runbook，避免依赖口头记忆。
+
+5. 负向 OTA 硬件用例。
+   - wrong SHA256：确认设备拒绝错误 artifact，且不切换到不可信镜像。
+   - interrupted download：下载中断后设备能回到当前有效固件。
+   - wrong board / older version：后端不返回 OTA envelope，设备保持正常上线。
+
+明日启动建议：
+
+```bash
+cd /Users/wq/EspLink
+git pull --ff-only
+cd backend
+npm start
+```
+
+真机串口使用：
+
+```bash
+cd /Users/wq/EspLink/esplink-firmware
+source /Users/wq/esp-idf/export.sh
+idf.py -p /dev/cu.usbmodem112301 monitor
+```
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -231,7 +284,7 @@ curl --noproxy '*' -s http://127.0.0.1:8088/api/v1/health/ready
 cd /Users/wq/EspLink/esplink-firmware
 source /Users/wq/esp-idf/export.sh
 idf.py build
-idf.py -p /dev/cu.usbmodem111301 flash monitor
+idf.py -p /dev/cu.usbmodem112301 flash monitor
 ```
 
 需要测试自动联网时：
