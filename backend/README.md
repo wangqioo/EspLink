@@ -11,13 +11,14 @@
 ## 功能特性
 
 - **BLE 蓝牙配网** — 微信小程序通过 EspLink BLE 协议为 ESP32 配网，配网成功后设备自动注册并绑定到微信账号
-- **WebSocket 长连接** — 固件通过 `/ws/device` 与后端保持长连接，支持实时 AI 对话、指令下发和 OTA 推送
+- **WebSocket 长连接** — 固件通过 `/ws/device` 与后端保持长连接，支持实时 AI 对话、指令下发、在线状态和 OTA 推送
 - **多厂商 LLM 代理** — 后端统一代理 DeepSeek、GLM、MiniMax、Moonshot、通义千问、火山引擎、OpenAI，设备无需持有任何厂商密钥
 - **流式 AI 回答** — 大模型回答通过 WebSocket 逐 chunk 推送给设备，实现实时打字机效果
 - **套餐模型管理** — 按租户分配 AI 模型（即套餐），用户订购后直接使用，无需自行配置
 - **多租户管理** — 支持按客户/团队隔离，每个租户独立的 API Key 池和用量配额
 - **API Key 管控** — 生成、启停、限额、过期时间，支持 Redis 缓存加速验证（命中率 >95%）
 - **设备管理** — 实时在线状态、心跳检测、强制下线、设备解绑、手动分配 Key
+- **固件发布与 OTA** — 管理后台上传 `.bin`，后端保存版本、SHA256、大小和 OTA 结果统计，固件上报 `started/success/failed`
 - **用量统计** — 今日/本月调用量、趋势图、模型占比、调用明细（支持导出 CSV）
 - **用量告警** — 达到阈值时向租户配置的 Webhook 推送告警（支持钉钉/企微/飞书）
 - **分布式限流** — 基于 Redis 令牌桶，多进程部署下共享限流计数
@@ -55,7 +56,7 @@
         └─────────────────────┘
                │
         ┌──────▼──────────────┐
-        │  官方 xiaozhi DB    │  MySQL 8 + Redis（复用）
+        │  xiaozhi 扩展 DB    │  MySQL 8 + Redis
         │  + 扩展业务表       │
         └─────────────────────┘
 ```
@@ -86,7 +87,9 @@
 | `tenants` | 租户，含每日/月限额、告警 Webhook、`ai_model`（分配给该租户的模型，即套餐） |
 | `api_keys` | API Key，含用量计数和过期时间 |
 | `devices` | 设备，以 MAC 地址为主键；含 `device_key`（WebSocket 认证）、`board_type`、`capabilities`、`wechat_user_id` |
-| `production_keys` | 量产设备预共享密钥；`REQUIRE_DEVICE_PSK=true` 时用于校验 `/api/ota/check` HMAC 签名 |
+| `firmware_releases` | 固件发布记录；按 `board_type/channel/version` 唯一，含 artifact URL、SHA256、大小、强制升级开关 |
+| `firmware_ota_attempts` | 设备 OTA 结果流水；记录 `started/success/download_failed/sha_mismatch` 等状态 |
+| `production_keys` | 量产设备预共享密钥；`REQUIRE_DEVICE_PSK=true` 时用于校验 `/api/ota/check` 和 `/api/ota/result` HMAC 签名 |
 | `wechat_users` | 微信用户，通过 EspLink 小程序登录自动创建，与设备关联 |
 | `usage_logs` | 调用明细，按月分区，保留 7 天；`api_key_id` 可为空（AI WebSocket 调用无需 Key） |
 | `usage_hourly` | 每小时预聚合，统计查询的主要数据源 |
@@ -111,6 +114,7 @@
 | 固件 | `GET /api/v1/firmware/releases` | 固件发布列表 |
 | 固件 | `POST /api/v1/firmware/releases` | 创建固件发布 |
 | 固件 | `PATCH /api/v1/firmware/releases/:id/active` | 启用 / 停用发布 |
+| 固件 | `GET /api/v1/firmware/ota-preview` | 只读 OTA 决策预览，不注册或更新设备 |
 | 用量 | `GET /api/v1/usage/summary` | 汇总统计 |
 | 用量 | `GET /api/v1/usage/daily` | 按天趋势 |
 | 用量 | `GET /api/v1/usage/logs` | 调用明细（7天内） |
@@ -127,6 +131,7 @@
 |---|---|---|---|
 | 微信登录 | `POST /api/auth/wechat` | 无 | 小程序 code 换 JWT token |
 | 固件注册 | `POST /api/ota/check` | 默认无；生产可启用 PSK HMAC | 设备上电注册，返回 device_key + ws 地址 |
+| OTA 结果 | `POST /api/ota/result` | 默认无；生产可启用 PSK HMAC | 固件上报 OTA started/success/failure |
 | 设备列表 | `GET /api/device/list` | 微信 JWT | 当前用户的绑定设备 |
 | 设备查找 | `GET /api/device/lookup?mac_suffix=AABBCC` | 微信 JWT | 按 MAC 后三字节查找刚上线设备 |
 | 设备绑定 | `POST /api/device/bind` | 微信 JWT | 绑定设备到微信账号 |
@@ -225,27 +230,36 @@ curl --noproxy '*' -s http://127.0.0.1:8088/api/v1/health/ready
 
 ## OTA 实机验证
 
-2026-06-16 已完成真实 OTA 闭环：
+截至 2026-06-19 已完成以下真实硬件 OTA 回归：
 
-- 基线固件：`esplink-v1 / 1.0.2`
-- 目标固件：`esplink-v1 / 1.0.3`
 - 设备：`10:51:DB:80:E2:E8`
-- 写入分区：`ota_0`
-- 结果：设备重启后从 `0x1a0000` 启动，上报 `firmware=1.0.3`，WebSocket 重新在线
+- 当前固件：`esplink-v1 / 1.0.5`
+- 普通 OTA：`1.0.4 -> 1.0.5`，数据库写入 `status=success`
+- 同版本强制 OTA：已通过，OTA app 启动后先标记 valid，再允许下一次 OTA
+- wrong SHA：设备拒绝不可信 artifact，上报 `sha_mismatch`，并恢复当前运行分区
+- interrupted download：设备上报 `download_failed`，重启后回到上一有效固件
+- signed boot/result：`REQUIRE_DEVICE_PSK=true` 下启动注册和 OTA 结果签名均通过本地硬件验证
 
 关键日志：
 
 ```text
 main: OTA available, upgrading...
-esp_https_ota: Writing to <ota_0> partition at offset 0x1a0000
+app_ota: OTA result reported: started
+app_ota: OTA artifact SHA256 verified
 app_ota: OTA success, restarting
-boot: Loaded app from partition at offset 0x1a0000
-main: === device boot: board=esplink-v1 fw=1.0.3 ===
+app_ota: OTA result reported: success
+main: === device boot: board=esplink-v1 fw=1.0.5 ===
 app_ws: WebSocket connected
 main: hello_ack: is_bound=1
 ```
 
-完整步骤见：[ESP32 OTA 实机验证手册](./docs/2026-06-15-esp32-ota-validation-runbook.md)。
+完整状态见：[开发状态与实机验证记录](../docs/2026-06-16-development-status.md) 和 [Production Readiness Regression Runbook](../docs/2026-06-16-production-readiness-regression.md)。
+
+仍需硬件或部署环境验证：
+
+- boot-fail OTA 自动回滚；
+- 后端重启后的 WebSocket 恢复；
+- HTTPS/WSS 真域名证书链路。
 
 ---
 

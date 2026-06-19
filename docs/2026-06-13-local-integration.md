@@ -2,7 +2,7 @@
 
 本文记录 EspLink 微信小程序、ESP32-S3 固件与小氧 AI 后端在 Mac 本地的联调状态。
 
-> 更新：本文是 2026-06-13 的历史联调记录。最新开发状态、自动联网验证和 `1.0.2 -> 1.0.3` OTA 实机闭环见 [2026-06-16 开发状态与实机验证记录](./2026-06-16-development-status.md)。
+> 更新：本文是 2026-06-13 的历史联调记录。最新开发状态、OTA 实机验证和剩余硬件/部署验证项见 [2026-06-16 开发状态与实机验证记录](./2026-06-16-development-status.md) 和 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md)。
 
 ## 当前结论
 

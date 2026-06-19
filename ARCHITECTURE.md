@@ -199,7 +199,7 @@ backend/
 └── uploads/          # 本地固件文件目录，运行时生成，不提交 Git
 ```
 
-`backend/` 是当前正式后端，来源于 `/Users/wq/ai_deploy_backend`。它统一承载管理 API、设备 WebSocket 网关、固件上传、固件发布和 OTA check。
+`backend/` 是当前正式后端。它统一承载管理 API、设备 WebSocket 网关、固件上传、固件发布、OTA check、OTA result 和生产设备 PSK 校验。
 
 旧 FastAPI 云端草案已从工作树删除；如需追溯历史实现，以 Git 历史记录为准。
 
@@ -249,51 +249,14 @@ POST /api/ota/check
 ### 3.4 数据库核心表
 
 ```sql
--- 用户
-CREATE TABLE users (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    openid      VARCHAR(64) UNIQUE,   -- 微信 openid
-    nickname    VARCHAR(64),
-    created_at  DATETIME
-);
-
--- 设备
-CREATE TABLE devices (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    mac             VARCHAR(17) UNIQUE NOT NULL,
-    board_type      VARCHAR(64) NOT NULL,
-    capabilities    JSON,             -- GetCapabilitiesJson() 快照
-    firmware_version VARCHAR(32),
-    user_id         BIGINT,           -- NULL 表示未绑定
-    alias           VARCHAR(64),
-    is_online       BOOLEAN DEFAULT FALSE,
-    last_seen_at    DATETIME,
-    created_at      DATETIME
-);
-
--- OTA 固件
-CREATE TABLE ota_firmware (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    board_type  VARCHAR(64) NOT NULL,
-    version     VARCHAR(32) NOT NULL,
-    file_path   VARCHAR(256),
-    file_size   INT,
-    sha256      VARCHAR(64),
-    is_enabled  BOOLEAN DEFAULT TRUE,
-    force_update BOOLEAN DEFAULT FALSE,
-    release_note TEXT,
-    created_at  DATETIME
-);
-
--- 设备消息日志（可选）
-CREATE TABLE device_messages (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    device_id   BIGINT NOT NULL,
-    direction   ENUM('up', 'down'),
-    msg_type    VARCHAR(32),
-    payload     JSON,
-    created_at  DATETIME
-);
+devices                 -- MAC 主键；含 device_key、board_type、capabilities、firmware、wechat_user_id、在线状态
+wechat_users            -- 微信 openid 登录用户
+firmware_releases       -- 固件发布；board_type/channel/version 唯一，含 artifact_url、sha256、size_bytes、force_update
+firmware_ota_attempts   -- OTA started/success/download_failed/sha_mismatch 等结果流水
+production_keys         -- 量产设备 PSK；REQUIRE_DEVICE_PSK=true 时校验 boot/result HMAC
+tenants / api_keys      -- 多租户和 Key 管理
+usage_logs / usage_hourly
+llm_providers
 ```
 
 ### 3.5 管理 API 主要端点
@@ -301,13 +264,18 @@ CREATE TABLE device_messages (
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/ota/check` | 设备启动引导（设备调用）|
+| POST | `/api/ota/result` | OTA 结果上报（设备调用）|
 | POST | `/api/device/bind` | 绑定设备（小程序调用）|
 | GET  | `/api/device/list` | 获取我的设备列表 |
-| GET  | `/api/device/{id}/status` | 获取设备实时状态 |
-| POST | `/api/device/{id}/command` | 下发指令给设备 |
-| POST | `/api/device/{id}/unbind` | 解绑 |
-| POST | `/api/ota/upload` | 上传固件（管理员）|
-| GET  | `/api/ota/download/{filename}` | 固件下载（设备调用）|
+| GET  | `/api/device/lookup?mac_suffix=AABBCC` | 配网成功后按 MAC 后缀查找设备 |
+| POST | `/api/device/:mac/command` | 下发指令给设备 |
+| POST | `/api/v1/devices/:mac/unbind` | 管理端解绑 |
+| POST | `/api/v1/firmware/artifacts` | 上传固件（管理员）|
+| GET  | `/api/v1/firmware/releases` | 固件发布列表 |
+| POST | `/api/v1/firmware/releases` | 创建固件发布 |
+| PATCH | `/api/v1/firmware/releases/:id/active` | 启用/停用发布 |
+| GET  | `/api/v1/firmware/ota-preview` | 管理端只读 OTA 决策预览 |
+| GET  | `/firmware/<filename>.bin` | 固件下载（设备调用）|
 
 ---
 
@@ -320,13 +288,10 @@ esplink-app/
 ├── pages/
 │   ├── index/          # 首页：我的设备列表
 │   ├── scan/           # BLE 扫描 & 配网（现有 EspLink 流程）
-│   ├── bind/           # 输入 bind_code 绑定设备
-│   ├── device/         # 设备详情（动态加载功能页）
-│   └── settings/       # 设置
+│   ├── provision/      # BluFi 配网
+│   ├── success/        # 配网成功后查找并绑定设备
+│   └── device/         # 设备详情（动态加载功能页）
 ├── device-pages/       # 各产品功能页（按 board_type 路由）
-│   ├── sensor/         # 温湿度传感器页
-│   ├── switch/         # 开关控制页
-│   ├── display/        # 显示屏设备页
 │   └── default/        # 通用兜底页
 ├── utils/
 │   ├── ble.js          # BLE 封装（现有）
@@ -338,14 +303,11 @@ esplink-app/
 
 ### 4.2 动态功能页机制（核心）
 
-设备的 `capabilities.ui_page` 字段决定小程序加载哪个功能组件：
+设备的 `capabilities.ui_page` 字段决定小程序加载哪个功能组件。当前仓库只有 `default` 兜底页；接入第二款产品时再向 registry 增加对应页面。
 
 ```javascript
 // utils/device-page-registry.js
 const registry = {
-    'sensor':   '/device-pages/sensor/index',
-    'switch':   '/device-pages/switch/index',
-    'display':  '/device-pages/display/index',
     'default':  '/device-pages/default/index',
 };
 
@@ -413,7 +375,7 @@ onLoad({ deviceId }) {
 | 固件 | ESP-IDF 5.x · C/C++ | 现有基础，继续沿用 |
 | 后端 API | Node.js + Express | 当前正式后端，位于 `backend/` |
 | WebSocket 网关 | Node.js + ws | 与设备长连接、hello/ping/OTA push 同进程管理 |
-| 数据库 | Prisma + SQLite/MySQL 兼容路径 | 当前本地开发使用 Prisma，后续按部署环境切换数据库 |
+| 数据库 | Prisma + MySQL | 当前 schema datasource 为 MySQL，Redis 用于在线状态、限流和缓存 |
 | OTA 文件 | Express 静态文件服务 | 管理后台上传 `.bin` 到 `uploads/firmware`，通过 `/firmware/*` 提供下载 |
 | 管理后台 | React + Vite + Ant Design | 位于 `backend/admin-frontend/` |
 | 小程序 | 微信原生 · JavaScript | 现有基础，继续沿用 |
@@ -428,21 +390,21 @@ onLoad({ deviceId }) {
 
 | 文件 | 状态 | 说明 |
 |------|------|------|
-| `main.c` | 70% | 状态机完整（Starting→Provisioning→Connecting→Activating→Online）；WebSocket 消息回调是 stub |
+| `main.c` | ✅ | 状态机完整（Starting→Provisioning→Connecting→BootRegistering→Online），启动注册、OTA、WebSocket 串联 |
 | `app_blufi.c` | ✅ | BLE 配网全部实现，可直接复用 |
 | `app_wifi.c` | ✅ | WiFi 连接 + 5次重试，完整 |
 | `app_nvs.c` | ✅ | WiFi凭证/token/ws_url/SN 持久化，完整；恢复出厂保留 SN |
-| `app_ota.c` | ✅ | OTA 版本比较 + HTTPS 下载刷写，完整 |
-| `app_ws.c` | 90% | WebSocket 连接、send_hello、帧收发完整；audio 回调是 stub |
+| `app_ota.c` | ✅ | OTA 版本比较、artifact SHA256 校验、结果上报、失败恢复 |
+| `app_ws.c` | ✅ | WebSocket 连接、send_hello、hello_ack、ota_push、command/config 基础处理 |
 | `app_button.c` | ✅ | 长按5秒恢复出厂，完整 |
 | `app_device.c` | ✅ | MAC/SN/BLE名称/固件版本，完整 |
 | `app_cube_demo.c` | ✅ | 3D cube 示例产品模块，联网注册成功后启动 LCD + QMI8658 渲染任务 |
 | `esp32_s3_szp.c` | ✅ | cube demo 使用的 ESP32-S3 LCD/QMI8658 BSP |
 
 **关键已有逻辑**（架构设计时需对齐，不要重复实现）：
-- `activate_task()` 已实现：POST 激活端点，请求带 MAC/SN/firmware_version，响应解析 `token` + `ws_url` 写 NVS → 这就是架构里的 `/api/ota/check`，只需改名对齐
-- `app_ws.c` 的 `send_hello()` 已发送设备元信息，只需扩充 `capabilities_json` 字段
-- `app_ota.c` 已独立实现 OTA check + 下载，Phase 2 需将其合并进激活流程（单次请求）
+- `boot_register_task()` 已实现：POST `/api/ota/check`，请求带 MAC/SN/board/firmware，响应解析 `token`、`websocket_url`、`is_bound` 和 `ota`
+- `app_ws.c` 的 `send_hello()` 已发送 board、firmware、capabilities 等设备元信息
+- `app_ota.c` 已接入启动注册响应中的 OTA envelope，并向 `/api/ota/result` 上报结果
 
 **固件语言问题（重要决策）**：
 - 现有代码是纯 **C**（ESP-IDF 风格），xiaozhi/zectrix 的 Board 抽象是 **C++**
@@ -453,27 +415,29 @@ onLoad({ deviceId }) {
 
 | 页面/模块 | 状态 | 说明 |
 |----------|------|------|
-| `pages/index` | 70% | 现在是纯 BLE 扫描页，需改造成「设备列表 + 添加设备」双模式 |
-| `pages/provision` | ✅ | 配网三步流程完整（连接→填写→发送），iOS input bug 待修 |
-| `pages/success` | 50% | 显示成功页，**缺少调用绑定 API** 的逻辑 |
-| `utils/ble.js` | ✅ | BLE 封装完整；`getCurrentWifiSSID()` 已实现但未接入 |
+| `pages/index` | ✅ | 已绑定设备列表，展示在线状态、固件版本、板型和绑定状态；添加入口跳转扫描 |
+| `pages/scan` | ✅ | BLE 扫描待配网设备 |
+| `pages/provision` | ✅ | 配网三步流程完整，输入框布局稳定，失败态支持重试和返回扫描 |
+| `pages/success` | ✅ | 配网成功后按 MAC 后缀 lookup 并绑定设备 |
+| `utils/ble.js` | ✅ | BLE 封装完整；`getCurrentWifiSSID()` 已接入配网页自动填充 |
 | `utils/blufi.js` | ✅ | BluFi 协议完整，可直接复用 |
-| `utils/api.js` | ❌ | 不存在，需新建（云端 API 封装） |
-| 用户登录/鉴权 | ❌ | 无 wx.login / openid 逻辑，需新建 |
-| 设备功能页路由 | ❌ | device-page-registry 不存在，需新建 |
+| `utils/api.js` | ✅ | 云端 API 封装，含微信登录、设备列表、lookup、bind、command |
+| 用户登录/鉴权 | ✅ | `app.js` 通过 `wx.login()` 获取后端 JWT |
+| 设备功能页路由 | ✅ | `device-page-registry.js` 已存在，当前有 default 产品页 |
 
 ---
 
 ## 八、开发路线图
 
-### Phase 1 — 修复配网体验（当前阶段，1-2周）
+### Phase 1 — 修复配网体验 ✅
 
 **固件**（无需改动）
 
 **小程序**：
-- [ ] 修复 iOS provision 页面 input 渲染 bug（核心阻塞项）
-- [ ] 接入 `getCurrentWifiSSID()` 实现 SSID 自动填充
-- [ ] iOS + Android 真机完整流程回归测试
+- [x] 修复 provision 页面 input 渲染 bug，并补静态回归测试
+- [x] 接入 `getCurrentWifiSSID()` 实现 SSID 自动填充
+- [x] 增加配网失败重试和返回扫描入口
+- [ ] 微信开发者工具和 iOS 真机完整流程复测
 
 ### Phase 2 — 固件框架升级 ✅
 
@@ -517,24 +481,24 @@ npm run build
 npm run dev
 ```
 
-### Phase 4 — 小程序多产品支持（2-3周）
+### Phase 4 — 小程序多产品支持 ✅
 
 目标：小程序能管理已绑定设备，并按产品类型展示不同功能页。
 
-- [ ] `utils/api.js`：封装所有云端 API 调用（含 wx.login + JWT 鉴权）
-- [ ] **改造 `pages/index`**：区分「已绑定设备列表」和「扫描添加新设备」两个入口
-- [ ] **`pages/success` 补全**：配网成功后调用 `/api/device/bind`（BLE 连接期间已有 MAC）
-- [ ] `utils/device-page-registry.js`：`board_type` → 功能页路径映射
-- [ ] `pages/device`：通用设备详情页，根据 `capabilities.ui_page` 跳转对应功能页
-- [ ] 第一个产品功能页（`device-pages/default`）
+- [x] `utils/api.js`：封装所有云端 API 调用（含 wx.login + JWT 鉴权）
+- [x] **改造 `pages/index`**：已绑定设备列表 + 添加设备入口
+- [x] **`pages/success` 补全**：配网成功后 lookup 并调用 `/api/device/bind`
+- [x] `utils/device-page-registry.js`：`board_type` → 功能页路径映射
+- [x] `pages/device`：通用设备详情页，根据能力路由产品页
+- [x] 第一个产品功能页（`device-pages/default`）
 
 ### Phase 5 — 完善与扩展（持续迭代）
 
 - [x] OTA 固件管理：后端管理台支持 `.bin` 上传，自动生成 URL/SHA256/文件大小，按 `board_type` 发布
 - [x] 第一个 OTA 示例固件：`cube_3d_v1.0` 已集成到 EspLink OTA 壳，版本 `esplink-v1 / 1.0.2`
-- [ ] 设备指令下发：小程序 → 云端 API → WebSocket 网关 → 设备
+- [x] 设备指令下发：小程序 → 云端 API → WebSocket 网关 → 设备
 - [ ] 第二款 ESP32 产品接入，验证多产品框架闭环
-- [ ] 管理后台 Web 增强：设备统计、固件管理、用户管理
+- [x] 管理后台 Web 增强：设备管理、固件发布、OTA 结果统计、租户/Key/用量/模型配置
 - [x] 测试阶段自动联网：提供非提交入库的本地 WiFi 注入方式，跳过 BLE 配网验证硬件 demo
 
 ---

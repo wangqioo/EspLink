@@ -2,6 +2,8 @@
 
 本文记录 2026-06-13 在 Mac 本地完成的 EspLink 设备、微信小程序、后端服务联调状态，供后续开发接手使用。
 
+> 历史快照：本文保留 2026-06-13 当天事实，包含旧后端路径。当前仓库已收口到 `/Users/wq/EspLink`；最新状态请看根目录 `docs/2026-06-16-development-status.md` 和 `docs/2026-06-16-production-readiness-regression.md`。
+
 ## 当前结论
 
 - 后端仓库：`/Users/wq/ai_deploy_backend`

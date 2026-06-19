@@ -2,6 +2,8 @@
 
 本文记录 `ai_deploy_backend` + `EspLink` 的本地 OTA 实机验证流程。目标是验证 ESP32 设备可以从后端获取固件发布信息，下载 OTA 包，写入 OTA 分区，重启后切换到新版本并重新上线。
 
+> 历史快照：本文保留 2026-06-15 到 2026-06-17 的 OTA 验证过程。当前最新 OTA/生产化回归已经推进到 `1.0.5`、signed boot/result、wrong SHA 和 interrupted download；请以根目录 `docs/2026-06-16-development-status.md` 和 `docs/2026-06-16-production-readiness-regression.md` 为准。
+
 ## 最新实测结论（2026-06-17）
 
 - 后端仓库：`/Users/wq/EspLink/backend`

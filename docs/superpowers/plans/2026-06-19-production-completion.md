@@ -33,32 +33,32 @@
 
 ## Task 1: Refresh The Development Status Entry
 
-- [ ] Mark signed production boot and signed OTA result reporting as hardware-validated.
-- [ ] Mark interrupted download as hardware-validated.
-- [ ] Keep HTTPS/WSS true-domain validation as environment-gated.
-- [ ] Keep boot-fail rollback and backend restart/WebSocket recovery as the next hardware checks until executed.
+- [x] Mark signed production boot and signed OTA result reporting as hardware-validated.
+- [x] Mark interrupted download as hardware-validated.
+- [x] Keep HTTPS/WSS true-domain validation as environment-gated.
+- [x] Keep boot-fail rollback and backend restart/WebSocket recovery as the next hardware checks until executed.
 
 ## Task 2: Production Security Design
 
-- [ ] Document production PSK storage options: factory partition, NVS with flash encryption, and eFuse-backed derivation.
-- [ ] Pick the near-term recommended path for EspLink: per-device PSK injected during manufacturing, protected by flash encryption for production builds, never stored in Git.
-- [ ] Document certificate/domain strategy: public HTTPS/WSS domain, reverse proxy termination, ESP-IDF crt bundle, expiry monitoring, and staged rotation.
-- [ ] Document admin key lifecycle: create, rotate, disable, audit last nonce/seen time, and emergency revoke.
+- [x] Document production PSK storage options: factory partition, NVS with flash encryption, and eFuse-backed derivation.
+- [x] Pick the near-term recommended path for EspLink: per-device PSK injected during manufacturing, protected by flash encryption for production builds, never stored in Git.
+- [x] Document certificate/domain strategy: public HTTPS/WSS domain, reverse proxy termination, ESP-IDF crt bundle, expiry monitoring, and staged rotation.
+- [x] Document admin key lifecycle: create, rotate, disable, audit last nonce/seen time, and emergency revoke.
 
 ## Task 3: Admin Firmware Release UX
 
-- [ ] Add a visible duplicate-version hint when the entered board/version already exists in loaded releases.
-- [ ] Add a quick deactivate action for active old releases with confirmation.
-- [ ] Show an OTA-check preview after release creation so the operator can see whether a representative device would receive the release.
-- [ ] Reuse existing firmware release APIs where possible.
-- [ ] Add focused route tests only if backend behavior changes.
+- [x] Add a visible duplicate-version hint when the entered board/version already exists in loaded releases.
+- [x] Add a quick deactivate action for active old releases with confirmation.
+- [x] Show an OTA-check preview after release creation so the operator can see whether a representative device would receive the release.
+- [x] Reuse existing firmware release APIs where possible.
+- [x] Add focused route tests only if backend behavior changes.
 
 ## Task 4: Mini Program Device Status UX
 
-- [ ] Update the device list to show online/offline, firmware, board type, and binding state.
-- [ ] Keep device cards dense and action-oriented; do not expose OTA management in the mini program.
-- [ ] Add provisioning failure copy and a retry entry that returns to the scan/provision flow.
-- [ ] Extend existing static tests so WXML/JS contract regressions are caught without WeChat DevTools.
+- [x] Update the device list to show online/offline, firmware, board type, and binding state.
+- [x] Keep device cards dense and action-oriented; do not expose OTA management in the mini program.
+- [x] Add provisioning failure copy and a retry entry that returns to the scan/provision flow.
+- [x] Extend existing static tests so WXML/JS contract regressions are caught without WeChat DevTools.
 
 ## Task 5: Hardware Regression Closure
 
@@ -70,9 +70,9 @@
 
 ## Task 6: Verification And Publish
 
-- [ ] Run backend tests affected by firmware/admin changes.
-- [ ] Run admin frontend build.
-- [ ] Run mini program static tests.
-- [ ] Build firmware with default development settings.
-- [ ] Confirm `git status --short` has no secret/config artifacts.
-- [ ] Commit and push to `origin/main`.
+- [x] Run backend tests affected by firmware/admin changes.
+- [x] Run admin frontend build.
+- [x] Run mini program static tests.
+- [x] Build firmware with default development settings.
+- [x] Confirm `git status --short` has no secret/config artifacts.
+- [x] Commit and push to `origin/main`.
