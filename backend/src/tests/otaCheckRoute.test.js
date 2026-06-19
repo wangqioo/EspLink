@@ -5,6 +5,10 @@ jest.mock('../services/otaCheckService', () => ({
   checkBootReport: jest.fn(),
 }));
 
+jest.mock('../services/otaResultService', () => ({
+  recordOtaResult: jest.fn(),
+}));
+
 jest.mock('../services/deviceIdentityService', () => ({
   verifyBootRequest: jest.fn(),
 }));
@@ -14,6 +18,7 @@ jest.mock('../services/deviceAbuseProtection', () => ({
 }));
 
 const otaCheckService = require('../services/otaCheckService');
+const otaResultService = require('../services/otaResultService');
 const deviceIdentityService = require('../services/deviceIdentityService');
 const deviceAbuseProtection = require('../services/deviceAbuseProtection');
 const esplinkRoutes = require('../routes/esplink');
@@ -138,5 +143,68 @@ describe('POST /api/ota/check', () => {
       mac: 'AA:BB:CC:DD:EE:FF',
     });
     expect(otaCheckService.checkBootReport).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/ota/result', () => {
+  const app = makeApp();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    deviceIdentityService.verifyBootRequest.mockResolvedValue({
+      allowed: true,
+      mode: 'development',
+    });
+    otaResultService.recordOtaResult.mockResolvedValue({
+      id: 10,
+      status: 'started',
+    });
+  });
+
+  test('records OTA result reports from devices', async () => {
+    const payload = {
+      mac: 'AA:BB:CC:DD:EE:FF',
+      board_type: 'esplink-v1',
+      from_version: '1.0.3',
+      target_version: '1.0.4',
+      status: 'started',
+      release_id: 4,
+      bytes_written: 0,
+    };
+
+    const res = await request(app).post('/api/ota/result').send(payload);
+
+    expect(res.status).toBe(200);
+    expect(deviceIdentityService.verifyBootRequest).toHaveBeenCalledWith(payload);
+    expect(otaResultService.recordOtaResult).toHaveBeenCalledWith(payload);
+    expect(res.body).toEqual({ ok: true, id: 10, status: 'started' });
+  });
+
+  test('rejects OTA result reports without mac', async () => {
+    const res = await request(app)
+      .post('/api/ota/result')
+      .send({ status: 'started' });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ detail: 'mac 不能为空' });
+    expect(deviceIdentityService.verifyBootRequest).not.toHaveBeenCalled();
+    expect(otaResultService.recordOtaResult).not.toHaveBeenCalled();
+  });
+
+  test('rejects OTA result reports when identity verification fails', async () => {
+    deviceIdentityService.verifyBootRequest.mockResolvedValue({
+      allowed: false,
+      statusCode: 403,
+      reason: 'device_signature_invalid',
+    });
+
+    const res = await request(app).post('/api/ota/result').send({
+      mac: 'AA:BB:CC:DD:EE:FF',
+      status: 'started',
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ detail: 'device_signature_invalid' });
+    expect(otaResultService.recordOtaResult).not.toHaveBeenCalled();
   });
 });

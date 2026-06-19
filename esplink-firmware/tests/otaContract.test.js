@@ -45,3 +45,17 @@ test('OTA SHA256 verification compares backend artifact SHA over raw partition b
   assert.doesNotMatch(appOtaC, /esp_partition_get_sha256\s*\(/);
   assert.match(appOtaC, /verify_boot_partition_(?:artifact_)?sha256\s*\([^)]*size_bytes/);
 });
+
+test('OTA upgrade reports lifecycle results back to the backend', () => {
+  const appOtaC = readMain('app_ota.c');
+  const appOtaH = readMain('app_ota.h');
+
+  assert.match(appOtaH, /result_url/);
+  assert.match(appOtaC, /app_ota_report_result\s*\(/);
+  assert.match(appOtaC, /"started"/);
+  assert.match(appOtaC, /"download_failed"/);
+  assert.match(appOtaC, /"sha_mismatch"/);
+  assert.match(appOtaC, /"success"/);
+  assert.match(appOtaC, /HTTP_METHOD_POST/);
+  assert.match(appOtaC, /\/api\/ota\/result/);
+});

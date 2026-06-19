@@ -71,6 +71,7 @@ model Device {
   tenant         Tenant?     @relation(fields: [tenant_id], references: [id], onDelete: SetNull)
   wechat_user    WechatUser? @relation(fields: [wechat_user_id], references: [id], onDelete: SetNull)
   usage_logs     UsageLog[]
+  ota_attempts   FirmwareOtaAttempt[]
 
   @@index([api_key_id])
   @@index([tenant_id])
@@ -153,11 +154,36 @@ model FirmwareRelease {
   release_notes String?  @db.Text
   created_at    DateTime @default(now()) @db.DateTime(0)
   updated_at    DateTime @updatedAt @db.DateTime(0)
+  ota_attempts  FirmwareOtaAttempt[]
 
   @@unique([board_type, channel, version])
   @@index([board_type, channel, is_active])
   @@index([board_type, version])
   @@map("firmware_releases")
+}
+
+model FirmwareOtaAttempt {
+  id             BigInt           @id @default(autoincrement())
+  mac_address    String           @db.VarChar(64)
+  board_type     String           @db.VarChar(64)
+  from_version   String?          @db.VarChar(64)
+  target_version String           @db.VarChar(64)
+  release_id     Int?
+  status         String           @db.VarChar(32)
+  error_code     String?          @db.VarChar(64)
+  error_message  String?          @db.Text
+  bytes_written  Int?
+  started_at     DateTime         @default(now()) @db.DateTime(0)
+  finished_at    DateTime?        @db.DateTime(0)
+  created_at     DateTime         @default(now()) @db.DateTime(0)
+  updated_at     DateTime         @updatedAt @db.DateTime(0)
+  device         Device           @relation(fields: [mac_address], references: [mac_address], onDelete: Cascade)
+  release        FirmwareRelease? @relation(fields: [release_id], references: [id], onDelete: SetNull)
+
+  @@index([mac_address, started_at])
+  @@index([release_id, status])
+  @@index([board_type, target_version])
+  @@map("firmware_ota_attempts")
 }
 
 model ProductionKey {

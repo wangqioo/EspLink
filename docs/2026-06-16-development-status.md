@@ -161,6 +161,53 @@ source /Users/wq/esp-idf/export.sh
 idf.py -p /dev/cu.usbmodem112301 monitor
 ```
 
+## 2026-06-18 继续开发记录
+
+已完成 OTA 结果上报闭环的首个垂直切片：
+
+- 后端新增 `firmware_ota_attempts` 数据模型和 SQL migration，用于记录设备 OTA attempt/result。
+- 新增 `/api/ota/result` 设备上报入口，沿用启动注册身份校验；设备可上报 `started`、`success`、`download_failed`、`sha_mismatch` 等状态。
+- OTA envelope 新增 `release_id` 和 `result_url`，固件可把结果关联回具体固件发布。
+- 固件 OTA 流程已在开始下载、下载失败、SHA mismatch、成功重启前上报结果；上报失败只记录 warning，不阻塞 OTA 主流程。
+- 管理后台固件发布列表新增 `OTA 结果` 列，展示成功数、失败数、进行中数和最近失败原因。
+
+已验证：
+
+```bash
+cd backend
+npm test -- otaResultService.test.js otaCheckRoute.test.js firmwareReleaseService.test.js otaCheckService.test.js firmwareRoutes.test.js --runInBand
+```
+
+结果：5 个 suite、42 个测试全部通过。
+
+```bash
+node --test esplink-firmware/tests/otaContract.test.js
+```
+
+结果：5 个固件契约测试全部通过。
+
+```bash
+cd esplink-firmware
+source /Users/wq/esp-idf/export.sh
+idf.py build
+```
+
+结果：构建通过，`esp32s3_device.bin` 大小 `0x135360`，OTA 分区剩余 `0x4aca0` bytes。
+
+```bash
+cd backend/admin-frontend
+npm run build
+```
+
+结果：构建通过；Vite 仍提示主 chunk 超过 500 KB，这是当前后台已有体积问题，不影响本次功能。
+
+下一步：
+
+- 对本地数据库执行 `backend/db/migrations/2026-06-18-create-firmware-ota-attempts.sql` 或 `npx prisma db push`。
+- 发布包含 OTA 上报的新固件版本，执行一次真机 OTA，确认 `firmware_ota_attempts` 写入 `started` 和 `success`。
+- 继续完善管理后台设备详情页，把最近 OTA attempt 挂到设备维度。
+- 增加 wrong SHA256 真机负向测试，确认上报 `sha_mismatch` 且设备不切换不可信镜像。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路

@@ -124,6 +124,7 @@ describe('otaCheckService', () => {
       },
     });
     firmwareReleaseService.findLatestActiveRelease.mockResolvedValue({
+      id: 7,
       version: '2.5.0',
       artifact_url: 'https://firmware.example.test/esp32.bin',
       sha256: 'a'.repeat(64),
@@ -152,6 +153,8 @@ describe('otaCheckService', () => {
         sha256: 'a'.repeat(64),
         size_bytes: 1024,
         force: false,
+        release_id: 7,
+        result_url: 'http://device.example.test/api/ota/result',
         release_notes: 'bug fixes',
       },
     });

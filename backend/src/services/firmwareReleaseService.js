@@ -1,5 +1,6 @@
 const prisma = require('../config/database');
 const { normalizeVersion, compareVersions } = require('./firmwareVersionPolicy');
+const { buildReleaseOtaSummaries } = require('./otaResultService');
 
 function serviceError(code, message) {
   const error = new Error(message);
@@ -97,7 +98,14 @@ async function listReleases({ boardType, channel, page = 1, pageSize = 20 } = {}
     prisma.firmwareRelease.count({ where }),
   ]);
 
-  return { list, total };
+  const summaries = await buildReleaseOtaSummaries(list.map((release) => release.id));
+  return {
+    list: list.map((release) => ({
+      ...release,
+      ota_summary: summaries[release.id] || null,
+    })),
+    total,
+  };
 }
 
 async function setReleaseActive(id, isActive) {

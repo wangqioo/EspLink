@@ -139,6 +139,7 @@ static void free_ota_update(app_ota_update_t *update)
     free((void *)update->url);
     free((void *)update->version);
     free((void *)update->sha256);
+    free((void *)update->result_url);
     memset(update, 0, sizeof(*update));
 }
 
@@ -155,9 +156,12 @@ static bool parse_ota_update(cJSON *ota_obj, app_ota_update_t *update)
 
     update->version = json_strdup(ota_obj, "version");
     update->sha256 = json_strdup(ota_obj, "sha256");
+    update->result_url = json_strdup(ota_obj, "result_url");
 
     cJSON *size = cJSON_GetObjectItem(ota_obj, "size_bytes");
     update->size_bytes = cJSON_IsNumber(size) ? size->valueint : 0;
+    cJSON *release_id = cJSON_GetObjectItem(ota_obj, "release_id");
+    update->release_id = cJSON_IsNumber(release_id) ? release_id->valueint : 0;
     update->force = cJSON_IsTrue(cJSON_GetObjectItem(ota_obj, "force"));
     return true;
 }

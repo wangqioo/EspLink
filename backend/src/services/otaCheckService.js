@@ -27,6 +27,8 @@ function buildUpdateResponse({ device, device_key, wsBase, release }) {
       sha256: release.sha256,
       size_bytes: release.size_bytes ?? null,
       force: Boolean(release.force_update),
+      release_id: release.id,
+      result_url: `${wsBase.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:')}/api/ota/result`,
       release_notes: release.release_notes ?? null,
     },
     retry_policy: {

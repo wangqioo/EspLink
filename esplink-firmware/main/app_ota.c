@@ -1,5 +1,6 @@
 #include "app_ota.h"
 #include "app_device.h"
+#include "board_config.h"
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -7,6 +8,7 @@
 #include "esp_partition.h"
 #include "cJSON.h"
 #include "mbedtls/sha256.h"
+#include "sdkconfig.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +59,28 @@ static bool is_https_url(const char *url)
 static esp_http_client_transport_t transport_for_url(const char *url)
 {
     return is_http_url(url) ? HTTP_TRANSPORT_OVER_TCP : HTTP_TRANSPORT_OVER_SSL;
+}
+
+static const char *default_result_url(void)
+{
+    static char url[256];
+    const char *check_url = CONFIG_ESPLINK_BOOT_REGISTER_URL;
+    const char *check_suffix = "/api/ota/check";
+    const char *result_suffix = "/api/ota/result";
+    size_t check_len = strlen(check_url);
+    size_t suffix_len = strlen(check_suffix);
+
+    if (check_len >= suffix_len &&
+        strcmp(check_url + check_len - suffix_len, check_suffix) == 0) {
+        size_t prefix_len = check_len - suffix_len;
+        if (prefix_len + strlen(result_suffix) < sizeof(url)) {
+            memcpy(url, check_url, prefix_len);
+            strcpy(url + prefix_len, result_suffix);
+            return url;
+        }
+    }
+
+    return NULL;
 }
 
 static bool is_hex_char(char ch)
@@ -225,6 +249,93 @@ static void log_update_metadata(const app_ota_update_t *update)
     }
 }
 
+static esp_err_t app_ota_report_result(const app_ota_update_t *update,
+                                       const char *status,
+                                       const char *error_code,
+                                       const char *error_message)
+{
+    const char *url = update && update->result_url && update->result_url[0]
+        ? update->result_url
+        : default_result_url();
+    if (!url || !status) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char body[768];
+    int written = snprintf(body,
+                           sizeof(body),
+                           "{\"mac\":\"%s\",\"sn\":\"%s\",\"board_type\":\"%s\","
+                           "\"from_version\":\"%s\",\"target_version\":\"%s\","
+                           "\"status\":\"%s\",\"release_id\":%d,\"bytes_written\":%d",
+                           app_device_get_mac_str(),
+                           app_device_get_sn(),
+                           BOARD_TYPE,
+                           app_device_get_firmware_version(),
+                           update && update->version ? update->version : "",
+                           status,
+                           update ? update->release_id : 0,
+                           update ? update->size_bytes : 0);
+    if (written < 0 || written >= (int)sizeof(body)) {
+        return ESP_ERR_NO_MEM;
+    }
+
+    size_t used = strlen(body);
+    if (error_code && error_code[0]) {
+        written = snprintf(body + used,
+                           sizeof(body) - used,
+                           ",\"error_code\":\"%s\"",
+                           error_code);
+        if (written < 0 || written >= (int)(sizeof(body) - used)) {
+            return ESP_ERR_NO_MEM;
+        }
+        used = strlen(body);
+    }
+
+    if (error_message && error_message[0]) {
+        written = snprintf(body + used,
+                           sizeof(body) - used,
+                           ",\"error_message\":\"%s\"",
+                           error_message);
+        if (written < 0 || written >= (int)(sizeof(body) - used)) {
+            return ESP_ERR_NO_MEM;
+        }
+        used = strlen(body);
+    }
+
+    if (used + 2 > sizeof(body)) {
+        return ESP_ERR_NO_MEM;
+    }
+    body[used++] = '}';
+    body[used] = '\0';
+
+    esp_http_client_config_t cfg = {
+        .url = url,
+        .transport_type = transport_for_url(url),
+        .skip_cert_common_name_check = false,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) {
+        return ESP_FAIL;
+    }
+
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, body, strlen(body));
+    esp_err_t err = esp_http_client_perform(client);
+    int http_status = esp_http_client_get_status_code(client);
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK || http_status < 200 || http_status >= 300) {
+        ESP_LOGW(TAG, "OTA result report failed: %s status=%d",
+                 esp_err_to_name(err),
+                 http_status);
+        return err == ESP_OK ? ESP_FAIL : err;
+    }
+
+    ESP_LOGI(TAG, "OTA result reported: %s", status);
+    return ESP_OK;
+}
+
 esp_err_t app_ota_check_and_upgrade(const char *check_url)
 {
     memset(s_resp_buf, 0, sizeof(s_resp_buf));
@@ -297,7 +408,9 @@ esp_err_t app_ota_check_and_upgrade(const char *check_url)
         .url = fw_url_copy,
         .version = remote_ver_copy,
         .sha256 = NULL,
+        .result_url = NULL,
         .size_bytes = 0,
+        .release_id = 0,
         .force = false,
     };
     cJSON_Delete(root);
@@ -346,6 +459,7 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
     }
 
     log_update_metadata(update);
+    app_ota_report_result(update, "started", NULL, NULL);
     esp_https_ota_config_t ota_cfg = {
         .http_config = &(esp_http_client_config_t){
             .url                     = update->url,
@@ -359,12 +473,15 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         err = verify_boot_partition_artifact_sha256(update->sha256, update->size_bytes);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "OTA integrity verification failed: %s", esp_err_to_name(err));
+            app_ota_report_result(update, "sha_mismatch", "sha_mismatch", esp_err_to_name(err));
             return err;
         }
         ESP_LOGI(TAG, "OTA success, restarting");
+        app_ota_report_result(update, "success", NULL, NULL);
         esp_restart();
     } else {
         ESP_LOGE(TAG, "OTA failed: %s", esp_err_to_name(err));
+        app_ota_report_result(update, "download_failed", "download_failed", esp_err_to_name(err));
     }
     return err;
 }
@@ -375,7 +492,9 @@ esp_err_t app_ota_upgrade_from_url(const char *fw_url)
         .url = fw_url,
         .version = NULL,
         .sha256 = NULL,
+        .result_url = NULL,
         .size_bytes = 0,
+        .release_id = 0,
         .force = true,
     };
     return app_ota_upgrade(&update);

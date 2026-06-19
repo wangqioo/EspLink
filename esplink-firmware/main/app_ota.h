@@ -6,7 +6,9 @@ typedef struct {
     const char *url;
     const char *version;
     const char *sha256;
+    const char *result_url;
     int size_bytes;
+    int release_id;
     bool force;
 } app_ota_update_t;
 

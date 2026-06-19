@@ -42,6 +42,27 @@ function renderChecksum(value) {
   );
 }
 
+function renderOtaSummary(summary) {
+  if (!summary || summary.total === 0) return '—';
+  const failure = summary.last_failure;
+  return (
+    <Space direction="vertical" size={2}>
+      <Space size={4} wrap>
+        <Tag color="green">成功 {summary.success}</Tag>
+        <Tag color={summary.failed > 0 ? 'red' : 'default'}>失败 {summary.failed}</Tag>
+        {summary.in_progress > 0 && <Tag color="processing">进行中 {summary.in_progress}</Tag>}
+      </Space>
+      {failure && (
+        <Tooltip title={failure.error_message || failure.error_code || failure.status}>
+          <Typography.Text type="danger" style={{ fontSize: 12 }}>
+            最近失败：{failure.error_code || failure.status}
+          </Typography.Text>
+        </Tooltip>
+      )}
+    </Space>
+  );
+}
+
 export default function Firmware() {
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
@@ -171,6 +192,12 @@ export default function Firmware() {
       dataIndex: 'size_bytes',
       width: 110,
       render: (v) => v == null ? '—' : `${Math.round(v / 1024)} KB`,
+    },
+    {
+      title: 'OTA 结果',
+      dataIndex: 'ota_summary',
+      width: 210,
+      render: renderOtaSummary,
     },
     {
       title: '状态',

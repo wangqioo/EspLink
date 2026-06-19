@@ -6,6 +6,10 @@ jest.mock('../config/database', () => ({
     count: jest.fn(),
     update: jest.fn(),
   },
+  firmwareOtaAttempt: {
+    groupBy: jest.fn(),
+    findFirst: jest.fn(),
+  },
 }));
 
 const prisma = require('../config/database');
@@ -142,6 +146,17 @@ describe('firmwareReleaseService', () => {
   test('listReleases returns paginated releases', async () => {
     prisma.firmwareRelease.findMany.mockResolvedValue([{ id: 1 }]);
     prisma.firmwareRelease.count.mockResolvedValue(1);
+    prisma.firmwareOtaAttempt.groupBy.mockResolvedValue([
+      { release_id: 1, status: 'success', _count: { _all: 2 } },
+      { release_id: 1, status: 'sha_mismatch', _count: { _all: 1 } },
+    ]);
+    prisma.firmwareOtaAttempt.findFirst.mockResolvedValue({
+      release_id: 1,
+      status: 'sha_mismatch',
+      error_code: 'sha_mismatch',
+      error_message: 'bad digest',
+      finished_at: new Date('2026-06-18T01:00:00Z'),
+    });
 
     const { listReleases } = require('../services/firmwareReleaseService');
     const result = await listReleases({
@@ -157,7 +172,24 @@ describe('firmwareReleaseService', () => {
       skip: 10,
       take: 10,
     });
-    expect(result).toEqual({ list: [{ id: 1 }], total: 1 });
+    expect(result).toEqual({
+      list: [{
+        id: 1,
+        ota_summary: {
+          total: 3,
+          success: 2,
+          failed: 1,
+          in_progress: 0,
+          last_failure: {
+            status: 'sha_mismatch',
+            error_code: 'sha_mismatch',
+            error_message: 'bad digest',
+            finished_at: new Date('2026-06-18T01:00:00Z'),
+          },
+        },
+      }],
+      total: 1,
+    });
   });
 
   test('setReleaseActive toggles release active state', async () => {

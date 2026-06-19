@@ -4,6 +4,7 @@ const svc = require('../services/wechatService');
 const deviceIdentityService = require('../services/deviceIdentityService');
 const deviceAbuseProtection = require('../services/deviceAbuseProtection');
 const otaCheckService = require('../services/otaCheckService');
+const otaResultService = require('../services/otaResultService');
 const prisma = require('../config/database');
 const policy = require('../services/deviceCommandPolicy');
 const commandRouter = require('../services/deviceCommandRouter');
@@ -44,6 +45,25 @@ router.post('/ota/check', async (req, res, next) => {
     const result = await otaCheckService.checkBootReport({ mac, board_type, firmware_version });
     res.json(result);
   } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/ota/result  { mac, board_type, target_version, status, ... }
+router.post('/ota/result', async (req, res, next) => {
+  try {
+    const { mac } = req.body || {};
+    if (!mac) return res.status(400).json({ detail: 'mac 不能为空' });
+
+    const identity = await deviceIdentityService.verifyBootRequest(req.body);
+    if (!identity.allowed) {
+      return res.status(identity.statusCode || 403).json({ detail: identity.reason });
+    }
+
+    const result = await otaResultService.recordOtaResult(req.body);
+    res.json({ ok: true, id: Number(result.id), status: result.status });
+  } catch (err) {
+    if (err.code === 40000) return res.status(400).json({ detail: err.message });
     next(err);
   }
 });
