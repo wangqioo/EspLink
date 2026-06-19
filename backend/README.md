@@ -230,7 +230,7 @@ curl --noproxy '*' -s http://127.0.0.1:8088/api/v1/health/ready
 
 ## OTA 实机验证
 
-截至 2026-06-19 已完成以下真实硬件 OTA 回归：
+截至 2026-06-20 已完成以下真实硬件 OTA/连接回归：
 
 - 设备：`10:51:DB:80:E2:E8`
 - 当前固件：`esplink-v1 / 1.0.5`
@@ -239,6 +239,8 @@ curl --noproxy '*' -s http://127.0.0.1:8088/api/v1/health/ready
 - wrong SHA：设备拒绝不可信 artifact，上报 `sha_mismatch`，并恢复当前运行分区
 - interrupted download：设备上报 `download_failed`，重启后回到上一有效固件
 - signed boot/result：`REQUIRE_DEVICE_PSK=true` 下启动注册和 OTA 结果签名均通过本地硬件验证
+- boot-fail rollback：临时 `1.0.8` 崩溃镜像通过下载和 SHA 校验后启动失败，bootloader 回滚到 `1.0.5`
+- backend restart/WebSocket recovery：后端重启后固件进入 5 秒重连循环，并在服务恢复后重新连接
 
 关键日志：
 
@@ -255,8 +257,7 @@ main: hello_ack: is_bound=1
 
 完整状态见：[开发状态与实机验证记录](../docs/2026-06-16-development-status.md) 和 [Production Readiness Regression Runbook](../docs/2026-06-16-production-readiness-regression.md)。
 
-已完成的硬件验证还包括 boot-fail OTA 自动回滚和后端重启后的
-WebSocket 恢复。仍需部署环境验证：
+仍需部署环境验证：
 
 - HTTPS/WSS 真域名证书链路。
 

@@ -2,6 +2,50 @@
 
 本文是 EspLink 当前开发状态的最新入口，覆盖本地后端、管理后台、ESP32-S3 固件、微信小程序和 OTA 验证。
 
+## 2026-06-20 收尾总览
+
+当前开发计划内的主体代码已经完成，核心本地/真机验证也已经闭环。后续重点不再是继续补基础代码，而是进入生产部署验收、真实小程序工具复测和长时间稳定性观察。
+
+已完成的产品闭环：
+
+- 小程序：BLE 扫描、BluFi 配网、配网页面失败态/重试、绑定设备列表、在线状态、固件版本、板型和绑定状态展示。
+- 固件：WiFi/NVS、恢复出厂、启动注册、WebSocket hello/ping、OTA 下载/校验/结果上报、OTA app valid、boot-fail 回滚。
+- 后端：设备注册、微信绑定、设备 WebSocket、AI 代理、OTA 发布/决策/结果记录、限流、生产 PSK 签名验证。
+- 管理后台：固件 artifact 上传、release 创建、重复版本提示、旧 release 停用确认、OTA check 预览和 OTA 结果摘要。
+- 生产安全：启动注册和 OTA result HMAC 签名、timestamp/nonce 防重放、生产 URL scheme 校验、HTTPS/WSS crt bundle 条件接入。
+
+核心验证状态：
+
+| 验证项 | 状态 | 证据 |
+|--------|------|------|
+| 默认后端测试 | 已通过 | `npm test -- --runInBand`，固件/OTA/管理后台相关测试已覆盖 |
+| 管理后台构建 | 已通过 | `backend/admin-frontend npm run build` |
+| 小程序静态测试 | 已通过 | `node --test tests/*.test.js` |
+| 默认固件构建 | 已通过 | `idf.py build`，默认关闭测试 WiFi 注入和生产强制签名 |
+| 启动注册 + WebSocket | 已通过真机验证 | `/dev/cu.usbmodem112301`，MAC `10:51:DB:80:E2:E8` |
+| 签名启动注册 | 已通过真机验证 | `REQUIRE_DEVICE_PSK=true` + 固件签名配置 |
+| 签名 OTA result | 已通过真机验证 | wrong SHA 路径上报 signed terminal result |
+| 普通 OTA | 已通过真机验证 | 后端发布记录返回 OTA envelope，固件写入 OTA 分区并重启上线 |
+| 同版本强制 OTA | 已通过真机验证 | `force_update=true` 时同版本仍执行 OTA |
+| wrong SHA 拒绝 | 已通过真机验证 | 固件上报 `sha_mismatch`，不切换不可信镜像 |
+| 下载中断恢复 | 已通过真机验证 | 固件上报 `download_failed`，恢复上一有效固件 |
+| boot-fail 自动回滚 | 已通过真机验证 | 临时 `1.0.8` 崩溃镜像启动失败后回滚到 `1.0.5` |
+| 后端重启 / WebSocket 恢复 | 已通过真机验证 | 固件进入 5 秒重连循环，后端恢复后同一 MAC 重新连接 |
+
+剩余上线验收：
+
+- HTTPS/WSS 真域名链路：代码已准备，仍需真实域名、证书和反向代理做真机验证。
+- 生产制造密钥：发货前必须切换到制造阶段注入的 per-device PSK，不能使用本地临时 PSK。
+- 小程序真机复测：BLE/配网页面仍需微信开发者工具和 iOS 真机确认。
+- 稳定性观察：路由器断开、弱网、长时间在线、后台重启组合场景建议继续跑观察窗口。
+- 可选扩展：二维码快速配网、手机推送通知、多芯片支持、远程诊断和日志上传。
+
+文档入口：
+
+- 回归步骤和真机证据：[Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md)
+- 生产安全策略：[Production Security Design](./2026-06-19-production-security-design.md)
+- 历史本地联调：[2026-06-13 本地联调记录与后续计划](./2026-06-13-local-integration.md)
+
 ## 当前项目边界
 
 - 主仓库：`/Users/wq/EspLink`
@@ -611,24 +655,27 @@ API 路径：
 
 ## 当前剩余工作
 
-### 必做
+### 已完成并关闭
 
-- 生产设备签名：后端 `REQUIRE_DEVICE_PSK=true`、固件启动注册签名、OTA 结果签名均已完成本地硬件验证；生产发货前还需切换到制造注入的 per-device PSK，不能使用本地临时 PSK。
-- HTTPS/WSS：生产环境传输强制和 crt bundle 接入已完成代码准备；仍需使用真实 HTTPS/WSS 域名做真机验证。
+- 生产设备签名：后端 `REQUIRE_DEVICE_PSK=true`、固件启动注册签名、OTA 结果签名均已完成本地硬件验证。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
 - OTA 完整性校验：正确 SHA256 接受路径和错误 SHA256 拒绝路径均已完成真机验证。
 - OTA 下载失败恢复：下载中断真机负向验证已完成，设备会上报 `download_failed` 并恢复到上一有效固件。
 - 后端重启 / WebSocket 恢复：2026-06-20 已用 `/dev/cu.usbmodem112301`、MAC `10:51:DB:80:E2:E8` 完成真机验证；固件断线后进入 5 秒重连循环，后端重启后记录同一设备重新连接。
 - OTA 回滚确认：OTA app valid、forced OTA 正向路径和 boot fail 自动回滚负向路径均已完成真机验证；2026-06-20 临时 boot-fail release `1.0.8` 已禁用，设备已回到默认开发固件配置。
 
-### 建议继续验证
+### 上线前必须验收
 
-- 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
-- 强制升级：`force_update=true` 服务端决策和真机同版本强制 OTA 均已验证。
-- 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；boot fail 自动回滚已完成真机验证。非 ESP32-S3 app 仍建议在独立硬件窗口验证。
-- 下载中断：一次性中断 artifact 服务、runbook 和真机验证均已完成；设备上报 `download_failed` 并恢复到上一有效固件。
-- 回滚策略：OTA boot fail 后的恢复路径已按 runbook 真机执行并通过。
+- 生产 PSK 制造注入：发货前必须切换到制造注入的 per-device PSK，不能使用本地临时 PSK。
+- HTTPS/WSS：生产环境传输强制和 crt bundle 接入已完成代码准备；仍需使用真实 HTTPS/WSS 域名做真机验证。
+- 生产 `.env`：`NODE_ENV=production`、`REQUIRE_DEVICE_PSK=true`、`WS_BASE_URL=wss://...`、`PUBLIC_BASE_URL=https://...`、`FIRMWARE_PUBLIC_BASE_URL=https://...` 必须与真实域名一致。
+- 小程序发布前复测：BLE/配网页面、SSID 自动填充、失败重试和绑定流程需用微信开发者工具 + iOS 真机确认。
+
+### 建议继续观察
+
 - 长时间在线：路由器断开、WebSocket 重连、业务心跳稳定性仍需继续观察；后端重启恢复已完成一次真机验证。
+- 错误 bin 扩展：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；boot fail 自动回滚已完成真机验证。非 ESP32-S3 app 仍建议在独立硬件窗口验证。
+- 生产化回归：真实部署环境上线前，按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 重新跑签名注册、SHA256 OTA、断线恢复和回滚路径。
 
 ### 体验优化
 

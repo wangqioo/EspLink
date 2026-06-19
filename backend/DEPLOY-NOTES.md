@@ -3,6 +3,26 @@
 > 编写日期：2026-05-10
 > 编写人：Hermes Agent (王齐口述)
 > 用途：后续产品化和安全性改造参考文档
+> 最新更新：2026-06-20，已同步 EspLink OTA、生产签名和真机验证收尾状态
+
+---
+
+## 当前状态快照
+
+截至 2026-06-20，开发计划内的后端、管理后台、小程序静态能力和 ESP32-S3 固件核心链路已经完成。真机验证已覆盖：
+
+- ESP32-S3 启动注册、WebSocket hello/ping、微信绑定后的在线状态；
+- 普通 OTA、同版本强制 OTA、OTA app valid；
+- wrong SHA 拒绝、下载中断恢复、boot-fail 自动回滚；
+- `REQUIRE_DEVICE_PSK=true` 下的签名启动注册和签名 OTA result；
+- 后端重启后的固件 WebSocket 自动重连。
+
+生产上线前仍需完成：
+
+- 真实域名 HTTPS/WSS、证书和反向代理验证；
+- 制造阶段 per-device PSK 注入流程，不能使用本地临时 PSK 发货；
+- 微信开发者工具和 iOS 真机复测 BLE/配网页面；
+- 长时间在线、路由器断开、弱网恢复观察。
 
 ---
 
@@ -185,17 +205,35 @@ DEFAULT_AI_MODEL=deepseek-chat
 
 ---
 
-## 三、真实硬件设备需修改的 3 处
+## 三、真实硬件设备配置点
 
-### 3.1 ESP32 固件 (`esplink-firmware/main/main.c`)
+### 3.1 ESP32 固件
 
-| 行号 | 当前值 | 改为 |
-|------|--------|-----|
-| L27 | `#define BOOT_REGISTER_URL "https://your-server.com/api/ota/check"` | `#define BOOT_REGISTER_URL "http://<your-public-host>:6050/api/ota/check"` |
-| L180 | `.transport_type = HTTP_TRANSPORT_OVER_SSL` | `.transport_type = HTTP_TRANSPORT_OVER_TCP` |
+当前固件配置已集中管理：启动注册 URL、生产传输强制、签名开关和测试 WiFi 注入都通过 Kconfig/配置文件管理。
 
-**原因**: 后端当前是 HTTP，没有 HTTPS。固件默认用了 SSL 传输，需改为 TCP。
-**建议**: 将 `BOOT_REGISTER_URL` 提取到 `board_config.h` 统一管理。
+本地硬件联调：
+
+```bash
+cd esplink-firmware
+idf.py menuconfig
+# EspLink → Boot register URL = http://<lan-ip>:8088/api/ota/check
+# EspLink → WebSocket/OTA 由后端响应和 release artifact_url 决定
+idf.py build flash monitor
+```
+
+生产候选固件：
+
+- `CONFIG_ESPLINK_BOOT_SIGNATURE_REQUIRED=y`
+- `CONFIG_ESPLINK_PRODUCTION_TRANSPORT=y`
+- `CONFIG_ESPLINK_TEST_AUTO_WIFI` 保持关闭
+- `CONFIG_ESPLINK_BOOT_PSK` 不作为发货密钥来源；发货前改为制造阶段注入 per-device PSK
+
+生产传输要求：
+
+- boot register 和 OTA result 使用 HTTPS；
+- firmware artifact URL 使用 HTTPS；
+- WebSocket 使用 WSS；
+- ESP-IDF crt bundle 只在 HTTPS/WSS URL 上挂载，本地 HTTP 验证仍可用。
 
 ### 3.2 微信小程序 (`esplink-app/utils/api.js`)
 
@@ -210,6 +248,16 @@ DEFAULT_AI_MODEL=deepseek-chat
 ```env
 WS_BASE_URL=ws://<your-public-host>:6050
 DEFAULT_AI_MODEL=deepseek-chat
+```
+
+生产环境需要改为：
+
+```env
+NODE_ENV=production
+REQUIRE_DEVICE_PSK=true
+PUBLIC_BASE_URL=https://<your-domain>
+FIRMWARE_PUBLIC_BASE_URL=https://<your-domain>
+WS_BASE_URL=wss://<your-domain>/ws/device
 ```
 
 ---

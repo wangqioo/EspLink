@@ -411,6 +411,11 @@ retry loop plus backend-side reconnect record.
 - Firmware builds with default development settings.
 - Firmware builds with production signing settings.
 - Signed boot succeeds with `REQUIRE_DEVICE_PSK=true`.
+- Signed OTA `started` and terminal result reports succeed with `REQUIRE_DEVICE_PSK=true`.
 - Correct OTA artifact SHA256 is accepted on hardware.
 - Wrong SHA256 is rejected on hardware.
 - OTA-booted firmware confirms itself valid before accepting a second OTA.
+- Interrupted download reports `download_failed` and recovers to the previous valid firmware.
+- Boot-fail OTA image rolls back to the previous valid firmware.
+- Backend restart causes firmware WebSocket retry and reconnect after service recovery.
+- HTTPS/WSS true-domain validation passes when deployment infrastructure is available.

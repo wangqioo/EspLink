@@ -71,6 +71,8 @@ Hardware validation already proved:
 - signed OTA `started` and terminal result reports are accepted by backend;
 - local HTTP validation remains usable because the firmware only attaches the
   ESP-IDF crt bundle for HTTPS/WSS URLs.
+- interrupted download, wrong SHA, boot-fail rollback, and backend restart
+  recovery all pass on the current ESP32-S3 validation board.
 
 ## Key Lifecycle
 
@@ -121,13 +123,17 @@ behavior.
 
 Before a production firmware release is shipped:
 
-- backend test suite passes;
-- admin frontend builds;
-- mini program static tests pass;
-- default firmware build passes;
-- signed boot hardware validation passes;
-- wrong SHA hardware validation passes;
-- interrupted download hardware validation passes;
-- boot-fail rollback hardware validation passes;
-- backend restart/WebSocket recovery hardware validation passes;
-- HTTPS/WSS true-domain validation passes when deployment infrastructure exists.
+| Gate | Current status | Notes |
+|------|----------------|-------|
+| backend test suite | passed | Re-run before each release candidate |
+| admin frontend build | passed | Re-run before each release candidate |
+| mini program static tests | passed | BLE still needs WeChat DevTools real-device checks |
+| default firmware build | passed | Default config disables local WiFi injection and compile-time production PSK |
+| signed boot hardware validation | passed | `REQUIRE_DEVICE_PSK=true` local hardware validation complete |
+| signed OTA result validation | passed | OTA `started` and terminal result reports signed and accepted |
+| wrong SHA hardware validation | passed | Device reports `sha_mismatch` and keeps current firmware |
+| interrupted download hardware validation | passed | Device reports `download_failed` and recovers |
+| boot-fail rollback hardware validation | passed | Temporary `1.0.8` crash image rolled back to `1.0.5` |
+| backend restart/WebSocket recovery | passed | Firmware retries and reconnects after backend restart |
+| per-device PSK manufacturing injection | pending production process | Required before shipping; local compile-time PSK is validation-only |
+| HTTPS/WSS true-domain validation | pending deployment infrastructure | Requires real domain, certificate, and reverse proxy |
