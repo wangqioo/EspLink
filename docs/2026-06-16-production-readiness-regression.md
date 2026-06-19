@@ -295,6 +295,25 @@ Expected outcome: device reboots into the previous valid firmware and backend
 `firmware_ota_attempts` records `status=download_failed`,
 `error_code=download_failed`, and a non-null `finished_at`.
 
+2026-06-19 hardware result: passed on `/dev/cu.usbmodem112301` after a full
+`erase-flash flash` restored the EspLink OTA partition table. Temporary release
+`id=7 / version=1.0.7` used `artifact_url=http://192.168.1.26:8099/interrupted.bin`
+and the correct SHA256/size for the current `esp32s3_device.bin`; the one-shot
+artifact server advertised `1343056` bytes and closed the connection after
+`131072` bytes. Backend accepted `/api/ota/result` with HTTP 200 and recorded:
+
+```text
+release_id=7 target_version=1.0.7 status=download_failed error_code=download_failed
+error_message=ESP_FAIL finished_at=2026-06-19 15:21:53
+```
+
+Because the one-shot artifact server exits after the first interrupted stream,
+the device's immediate retry attempts also produced `download_failed` rows with
+`ESP_ERR_HTTP_CONNECT`; this is expected for this local harness. The temporary
+release was reset to `is_active=0` and `force_update=0`. A final boot check
+confirmed the device returned to `fw=1.0.5`, `boot register ok`, WebSocket
+connected, and `hello_ack`.
+
 ## 8.1 Boot Fail Recovery
 
 Publish an ESP image that passes upload and download checks but cannot boot the

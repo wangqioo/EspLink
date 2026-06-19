@@ -382,6 +382,52 @@ firmware_ota_attempts: release_id=6 target_version=1.0.6 status=sha_mismatch err
 `hello_ack: is_bound=1`。仓库 `sdkconfig` 已恢复为不包含本地 PSK、不强制签名、
 不启用测试自动 WiFi 的默认状态。
 
+## 2026-06-19 下载中断真机验证
+
+按 production readiness runbook 执行了 interrupted download 负向验证。开始时
+板子被其它项目固件覆盖，bootloader 显示 factory-only 分区表；已通过完整
+`erase-flash flash` 恢复 EspLink OTA 分区表：
+
+```text
+otadata  data ota     0xf000
+factory  app  factory 0x20000
+ota_0    app  ota_0   0x1a0000
+ota_1    app  ota_1   0x320000
+main: === device boot: board=esplink-v1 fw=1.0.5 ===
+```
+
+随后启动一次性 artifact 服务：
+
+```text
+Interrupted firmware server listening on http://0.0.0.0:8099/interrupted.bin
+Advertised size: 1343056, bytes before disconnect: 131072
+Serving interrupted artifact for GET /interrupted.bin
+Sent 131072 of 1343056 bytes, closing connection
+```
+
+临时发布 `id=7 / version=1.0.7` 指向
+`http://192.168.1.26:8099/interrupted.bin`，使用当前 `esp32s3_device.bin`
+正确 SHA256 `6591c33bc170c34d9cfd590e74b2ad7465aab761b0a067c57aeaa10fbdcbe5c9`
+和 size `1343056`。后端收到 OTA check 与两次 OTA result：
+
+```text
+POST /api/ota/check 200
+POST /api/ota/result 200
+POST /api/ota/result 200
+```
+
+数据库确认终态：
+
+```text
+release_id=7 target_version=1.0.7 status=download_failed error_code=download_failed error_message=ESP_FAIL finished_at=2026-06-19 15:21:53
+```
+
+由于中断服务是一次性的，设备随后重试时还记录了两条
+`ESP_ERR_HTTP_CONNECT` 的 `download_failed`，符合本地 harness 预期。验证后
+临时发布已恢复为 `is_active=0`、`force_update=0`，`8099` 已无监听。最终短
+monitor 确认设备恢复到 `fw=1.0.5`，`boot register ok`、WebSocket connected
+和 `hello_ack` 正常。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -578,7 +624,7 @@ API 路径：
 - 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
 - 强制升级：`force_update=true` 服务端决策已补自动化测试；真机执行已暴露固件回滚确认问题，需先修复再复测。
 - 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
-- 下载中断：已补一次性中断 artifact 服务和 runbook，仍需真机执行。
+- 下载中断：一次性中断 artifact 服务、runbook 和真机验证均已完成；设备上报 `download_failed` 并恢复到上一有效固件。
 - 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。
 - 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性。
 
