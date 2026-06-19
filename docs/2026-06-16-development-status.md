@@ -298,6 +298,40 @@ app_ota: OTA result reported: sha_mismatch
 - 数据库 `firmware_ota_attempts` 已写入 `sha_mismatch`，最近记录包括 id `21`、`20`、`19`，`error_code=sha_mismatch`、`error_message=ESP_ERR_INVALID_CRC`、`bytes_written=1266528`。
 - 临时错误发布 `firmware_releases.id=6 / version=1.0.6` 已恢复为 `is_active=0`、`force_update=0`，避免设备继续重复 OTA。
 
+## 2026-06-19 多 agent 并行推进记录
+
+已完成代码和 runbook 准备：
+
+- 固件生产签名链路补齐：`/api/ota/result` 现在和启动注册一样附带 `timestamp`、`nonce`、`signature`，避免后端开启 `REQUIRE_DEVICE_PSK=true` 后 OTA 结果上报被拒绝。
+- 固件签名前新增 SNTP 时间同步，签名 timestamp 改为 epoch seconds，避免使用启动 uptime 导致后端判定 `device_timestamp_stale`。
+- 固件生产传输加固：`CONFIG_ESPLINK_PRODUCTION_TRANSPORT=y` 时拒绝 HTTP boot register、HTTP OTA result 和非 WSS WebSocket URL；boot register、OTA download/result、WSS client 均接入 ESP-IDF crt bundle。
+- 后端生产传输配置校验：`NODE_ENV=production` 时启动阶段要求 `WS_BASE_URL=wss://...`，`PUBLIC_BASE_URL`/`FIRMWARE_PUBLIC_BASE_URL` 如配置则必须为 `https://...`。
+- 后端固件发布加固：生产环境激活 firmware release 时拒绝非 HTTPS `artifact_url`。
+- 下载中断负例 runbook 已修正：不再建议停止后端，而是用单独的一次性中断 artifact 服务保持 `/api/ota/result` 可用。
+- 新增 `backend/scripts/interrupted-firmware-server.js`，用于本地硬件负例中发送部分 `.bin` 后主动断开连接。
+
+已验证：
+
+```bash
+cd backend
+npm test -- productionConfigValidation firmwareReleaseService firmwareRoutes otaCheckService deviceIdentityService
+```
+
+结果：5 个 suite、52 个测试全部通过。
+
+```bash
+node --test esplink-firmware/tests/otaContract.test.js
+```
+
+结果：10 个固件契约测试全部通过。
+
+```bash
+cd esplink-firmware
+idf.py build
+```
+
+结果：构建通过，`esp32s3_device.bin` 大小 `0x147d30`，OTA 分区剩余 `0x382d0` bytes。当前磁盘空间仍偏低，后续完整重编译前建议先释放空间。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -483,8 +517,8 @@ API 路径：
 
 ### 必做
 
-- 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
-- HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
+- 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件启动注册和 OTA 结果上报均支持签名；仍需实机验证生产 PSK 配置。
+- HTTPS/WSS：生产环境传输强制和 crt bundle 接入已完成代码准备；仍需使用真实 HTTPS/WSS 域名做真机验证。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
 - OTA 完整性校验：正确 SHA256 接受路径和错误 SHA256 拒绝路径均已完成真机验证。
 - OTA 回滚确认：OTA app valid 和 forced OTA 正向路径已完成真机验证；boot fail 后的自动回滚路径仍需负向验证。
@@ -494,7 +528,7 @@ API 路径：
 - 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
 - 强制升级：`force_update=true` 服务端决策已补自动化测试；真机执行已暴露固件回滚确认问题，需先修复再复测。
 - 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
-- 下载中断：后端中断、WiFi 断开、重启后恢复，按 runbook 真机执行。
+- 下载中断：已补一次性中断 artifact 服务和 runbook，仍需真机执行。
 - 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。
 - 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性。
 

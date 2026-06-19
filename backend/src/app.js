@@ -10,6 +10,7 @@ const routes = require('./routes');
 const eslinkRoutes = require('./routes/esplink');
 const wsManager = require('./ws/deviceWsManager');
 const { getUploadDir } = require('./services/firmwareArtifactService');
+const { assertProductionTransportConfig } = require('./services/productionConfigValidation');
 
 const app = express();
 
@@ -42,6 +43,13 @@ app.use(errorHandler);
 const PORT = parseInt(process.env.PORT) || 8088;
 
 if (require.main === module) {
+  try {
+    assertProductionTransportConfig();
+  } catch (err) {
+    console.error(`[Config] ${err.message}`);
+    process.exit(1);
+  }
+
   const server = http.createServer(app);
   wsManager.setup(server);
 

@@ -2,11 +2,11 @@
 #include "app_device.h"
 #include "esp_log.h"
 #include "esp_random.h"
-#include "esp_timer.h"
 #include "mbedtls/md.h"
 #include "sdkconfig.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #define TAG "boot_sign"
 
@@ -27,8 +27,7 @@ static void bytes_to_hex(const unsigned char *bytes, size_t len, char *out, size
 
 static int64_t current_timestamp_seconds(void)
 {
-    int64_t now_us = esp_timer_get_time();
-    return now_us > 0 ? now_us / 1000000 : 0;
+    return (int64_t)time(NULL);
 }
 
 bool app_boot_signing_is_configured(void)

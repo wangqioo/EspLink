@@ -60,6 +60,53 @@ test('OTA upgrade reports lifecycle results back to the backend', () => {
   assert.match(appOtaC, /\/api\/ota\/result/);
 });
 
+test('OTA result reports include boot signing fields when boot PSK is configured', () => {
+  const appOtaC = readMain('app_ota.c');
+
+  assert.match(appOtaC, /#include\s+"app_boot_signing\.h"/);
+  assert.match(appOtaC, /app_boot_signing_build\s*\(/);
+  assert.match(appOtaC, /app_boot_signing_append_json\s*\(/);
+  assert.match(appOtaC, /OTA result signature enabled/);
+});
+
+test('signed boot registration uses epoch time synchronized by SNTP', () => {
+  const signingC = readMain('app_boot_signing.c');
+  const mainC = readMain('main.c');
+
+  assert.match(signingC, /#include\s+<time\.h>/);
+  assert.match(signingC, /time\s*\(\s*NULL\s*\)/);
+  assert.doesNotMatch(signingC, /esp_timer_get_time\s*\(/);
+  assert.match(mainC, /#include\s+"esp_netif_sntp\.h"/);
+  assert.match(mainC, /sync_epoch_time_for_signing\s*\(/);
+  assert.match(mainC, /esp_netif_sntp_sync_wait\s*\(/);
+  assert.match(mainC, /SNTP sync failed before signed boot register/);
+});
+
+test('production transport rejects insecure boot register, OTA result, and WebSocket URLs', () => {
+  const appOtaC = readMain('app_ota.c');
+  const appWsC = readMain('app_ws.c');
+  const mainC = readMain('main.c');
+
+  assert.match(mainC, /CONFIG_ESPLINK_PRODUCTION_TRANSPORT[\s\S]*production transport requires HTTPS boot register URL/);
+  assert.match(appOtaC, /CONFIG_ESPLINK_PRODUCTION_TRANSPORT[\s\S]*production transport requires HTTPS OTA result url/);
+  assert.match(appWsC, /CONFIG_ESPLINK_PRODUCTION_TRANSPORT[\s\S]*production transport requires WSS WebSocket url/);
+});
+
+test('HTTPS and WSS clients attach the ESP-IDF crt bundle', () => {
+  const appOtaC = readMain('app_ota.c');
+  const appWsC = readMain('app_ws.c');
+  const mainC = readMain('main.c');
+  const cmake = readMain('CMakeLists.txt');
+
+  assert.match(appOtaC, /#include\s+"esp_crt_bundle\.h"/);
+  assert.match(appWsC, /#include\s+"esp_crt_bundle\.h"/);
+  assert.match(mainC, /#include\s+"esp_crt_bundle\.h"/);
+  assert.match(appOtaC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
+  assert.match(appWsC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
+  assert.match(mainC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
+  assert.match(cmake, /esp-tls/);
+});
+
 test('OTA SHA256 failure restores the current running partition before returning', () => {
   const appOtaC = readMain('app_ota.c');
   const mismatchIndex = appOtaC.indexOf('"sha_mismatch"');

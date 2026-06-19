@@ -1,6 +1,10 @@
 const prisma = require('../config/database');
 const { normalizeVersion, compareVersions } = require('./firmwareVersionPolicy');
 const { buildReleaseOtaSummaries } = require('./otaResultService');
+const {
+  isHttpsUrl,
+  isProductionTransportRequired,
+} = require('./productionConfigValidation');
 
 function serviceError(code, message) {
   const error = new Error(message);
@@ -49,6 +53,12 @@ function normalizeOptionalSizeBytes(sizeBytes) {
   return normalized;
 }
 
+function validateActiveProductionArtifactUrl(artifactUrl) {
+  if (isProductionTransportRequired() && !isHttpsUrl(artifactUrl)) {
+    throw serviceError(40000, 'active production firmware releases require https artifact_url');
+  }
+}
+
 async function createRelease(input) {
   validateRequired(input);
 
@@ -59,6 +69,13 @@ async function createRelease(input) {
 
   const boardType = normalizeBoardType(input.board_type);
   const channel = normalizeChannel(input.channel);
+  const artifactUrl = String(input.artifact_url).trim();
+  const isActive = normalizeOptionalBoolean(input, 'is_active', true);
+
+  if (isActive) {
+    validateActiveProductionArtifactUrl(artifactUrl);
+  }
+
   const duplicate = await prisma.firmwareRelease.findFirst({
     where: { board_type: boardType, channel, version },
   });
@@ -71,11 +88,11 @@ async function createRelease(input) {
     data: {
       board_type: boardType,
       version,
-      artifact_url: String(input.artifact_url).trim(),
+      artifact_url: artifactUrl,
       sha256: String(input.sha256).trim(),
       size_bytes: normalizeOptionalSizeBytes(input.size_bytes),
       channel,
-      is_active: normalizeOptionalBoolean(input, 'is_active', true),
+      is_active: isActive,
       force_update: normalizeOptionalBoolean(input, 'force_update', false),
       release_notes: input.release_notes || null,
     },
@@ -109,6 +126,15 @@ async function listReleases({ boardType, channel, page = 1, pageSize = 20 } = {}
 }
 
 async function setReleaseActive(id, isActive) {
+  if (isActive && isProductionTransportRequired()) {
+    const release = await prisma.firmwareRelease.findFirst({
+      where: { id: Number(id) },
+    });
+    if (release) {
+      validateActiveProductionArtifactUrl(release.artifact_url);
+    }
+  }
+
   return prisma.firmwareRelease.update({
     where: { id: Number(id) },
     data: { is_active: Boolean(isActive) },

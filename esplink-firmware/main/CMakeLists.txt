@@ -17,6 +17,7 @@ idf_component_register(
         esp_wifi
         esp_event
         esp_netif
+        esp-tls
         bt
         esp_https_ota
         esp_http_client

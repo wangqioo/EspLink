@@ -1,6 +1,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_event.h"
+#include "esp_crt_bundle.h"
+#include "esp_netif_sntp.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_http_client.h"
@@ -238,11 +240,64 @@ static esp_http_client_transport_t transport_for_url(const char *url)
     return HTTP_TRANSPORT_OVER_SSL;
 }
 
+static esp_err_t sync_epoch_time_for_signing(void)
+{
+    if (!app_boot_signing_is_configured()) {
+        return ESP_OK;
+    }
+
+    time_t now = time(NULL);
+    if (now > 1700000000) {
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "syncing time before signed boot register");
+    esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+    esp_err_t err = esp_netif_sntp_init(&config);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "SNTP init failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_netif_sntp_sync_wait(pdMS_TO_TICKS(15000));
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SNTP sync failed before signed boot register: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    now = time(NULL);
+    if (now <= 1700000000) {
+        ESP_LOGE(TAG, "SNTP sync produced invalid epoch time: %lld", (long long)now);
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "time synced for signed boot register: %lld", (long long)now);
+    return ESP_OK;
+}
+
 static void boot_register_task(void *arg)
 {
     ESP_LOGI(TAG, "boot register: mac=%s sn=%s board=%s fw=%s",
              app_device_get_mac_str(), app_device_get_sn(),
              BOARD_TYPE, BOARD_FIRMWARE_VERSION);
+
+    esp_err_t time_err = sync_epoch_time_for_signing();
+    if (time_err != ESP_OK) {
+        set_state(STATE_FATAL_ERROR);
+        vTaskDelete(NULL);
+        return;
+    }
+
+#if CONFIG_ESPLINK_PRODUCTION_TRANSPORT
+    if (strncmp(CONFIG_ESPLINK_BOOT_REGISTER_URL, "https://", 8) != 0) {
+        ESP_LOGE(TAG,
+                 "production transport requires HTTPS boot register URL: %s",
+                 CONFIG_ESPLINK_BOOT_REGISTER_URL);
+        set_state(STATE_FATAL_ERROR);
+        vTaskDelete(NULL);
+        return;
+    }
+#endif
 
     char body[384];
     snprintf(body, sizeof(body),
@@ -285,6 +340,7 @@ static void boot_register_task(void *arg)
         .event_handler  = reg_http_event,
         .method         = HTTP_METHOD_POST,
         .transport_type = transport_for_url(CONFIG_ESPLINK_BOOT_REGISTER_URL),
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     esp_http_client_set_header(client, "Content-Type", "application/json");

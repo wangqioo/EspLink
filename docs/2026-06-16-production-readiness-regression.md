@@ -224,24 +224,42 @@ Expected outcome: no OTA starts.
 
 ## 8. Interrupted Download
 
-Start OTA and stop the backend while the device downloads the `.bin`.
+Start OTA from an artifact URL that closes the firmware download connection
+early while the backend API stays online. Do not stop the backend if this case
+is expected to record `/api/ota/result`; stopping the backend also prevents the
+device from reporting `download_failed`.
 
 Suggested local steps:
 
-1. Start the backend with a release that points to a large valid `.bin`.
-2. Power-cycle or reset the device so boot registration returns the OTA envelope.
-3. Watch serial logs until `OTA target url=` appears.
-4. Stop the backend process before download completion.
-5. Leave the device running until it restarts and reports the previous firmware.
+1. Start the normal backend on port `8088`.
+2. Start the one-shot interrupted artifact server:
+
+```bash
+cd backend
+node scripts/interrupted-firmware-server.js ../esplink-firmware/build/esp32s3_device.bin 131072 8099
+```
+
+3. Create a temporary active release for the device board with a higher version,
+   correct `sha256` and `size_bytes` for the same `.bin`, and `artifact_url` set
+   to `http://<LAN-IP>:8099/interrupted.bin`.
+4. Power-cycle or reset the device so boot registration returns the OTA envelope.
+5. Leave the device running until OTA fails, it reports the result, and it
+   restarts into the previous firmware.
+6. Disable the temporary release.
 
 Expected observations:
 
 ```text
+OTA available, upgrading...
+OTA result reported: started
 OTA failed
+OTA result reported: download_failed
 fatal error, restarting in 5s
 ```
 
-Expected outcome: device reboots into the previous valid firmware.
+Expected outcome: device reboots into the previous valid firmware and backend
+`firmware_ota_attempts` records `status=download_failed`,
+`error_code=download_failed`, and a non-null `finished_at`.
 
 ## 8.1 Boot Fail Recovery
 

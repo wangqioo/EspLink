@@ -1,8 +1,10 @@
 #include "app_ws.h"
 #include "app_device.h"
 #include "board_config.h"
+#include "esp_crt_bundle.h"
 #include "esp_websocket_client.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "cJSON.h"
@@ -16,6 +18,16 @@ static esp_websocket_client_handle_t s_client;
 static ws_callbacks_t                s_cbs;
 static bool                          s_connected;
 static TaskHandle_t                  s_ping_task;
+
+static bool is_ws_url(const char *url)
+{
+    return url && strncmp(url, "ws://", 5) == 0;
+}
+
+static bool is_wss_url(const char *url)
+{
+    return url && strncmp(url, "wss://", 6) == 0;
+}
 
 static void ping_task(void *arg)
 {
@@ -120,6 +132,19 @@ esp_err_t app_ws_init(const char *url, const char *token,
 {
     memcpy(&s_cbs, cbs, sizeof(ws_callbacks_t));
     s_connected = false;
+
+    if (!is_ws_url(url) && !is_wss_url(url)) {
+        ESP_LOGE(TAG, "unsupported WebSocket url scheme: %s", url ? url : "(null)");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+#if CONFIG_ESPLINK_PRODUCTION_TRANSPORT
+    if (!is_wss_url(url)) {
+        ESP_LOGE(TAG, "production transport requires WSS WebSocket url: %s", url);
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif
+
     ESP_LOGI(TAG, "connecting to %s", url);
 
     // 拼接 Authorization header
@@ -132,6 +157,7 @@ esp_err_t app_ws_init(const char *url, const char *token,
         .reconnect_timeout_ms = 5000,
         .network_timeout_ms   = 10000,
         .ping_interval_sec    = 30,
+        .crt_bundle_attach    = esp_crt_bundle_attach,
     };
 
     s_client = esp_websocket_client_init(&cfg);

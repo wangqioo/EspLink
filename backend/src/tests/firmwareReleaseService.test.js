@@ -17,6 +17,8 @@ const prisma = require('../config/database');
 describe('firmwareReleaseService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    delete process.env.NODE_ENV;
+    delete process.env.REQUIRE_DEVICE_PSK;
   });
 
   test('createRelease normalizes versions and applies defaults', async () => {
@@ -102,6 +104,43 @@ describe('firmwareReleaseService', () => {
       sha256: 'a'.repeat(64),
       force_update: 'false',
     })).rejects.toMatchObject({ code: 40000, message: 'force_update must be boolean' });
+  });
+
+  test('createRelease rejects active http artifact URLs in production', async () => {
+    process.env.NODE_ENV = 'production';
+    prisma.firmwareRelease.findFirst.mockResolvedValue(null);
+    const { createRelease } = require('../services/firmwareReleaseService');
+
+    await expect(createRelease({
+      board_type: 'esp32-s3-box',
+      version: '2.5.0',
+      artifact_url: 'http://firmware.example.test/esp32.bin',
+      sha256: 'a'.repeat(64),
+      is_active: true,
+    })).rejects.toMatchObject({
+      code: 40000,
+      message: 'active production firmware releases require https artifact_url',
+    });
+    expect(prisma.firmwareRelease.create).not.toHaveBeenCalled();
+  });
+
+  test('createRelease allows inactive http artifact URLs in production', async () => {
+    process.env.NODE_ENV = 'production';
+    prisma.firmwareRelease.findFirst.mockResolvedValue(null);
+    prisma.firmwareRelease.create.mockResolvedValue({
+      id: 1,
+      artifact_url: 'http://firmware.example.test/esp32.bin',
+      is_active: false,
+    });
+    const { createRelease } = require('../services/firmwareReleaseService');
+
+    await expect(createRelease({
+      board_type: 'esp32-s3-box',
+      version: '2.5.0',
+      artifact_url: 'http://firmware.example.test/esp32.bin',
+      sha256: 'a'.repeat(64),
+      is_active: false,
+    })).resolves.toMatchObject({ is_active: false });
   });
 
   test('findLatestActiveRelease selects highest semantic version', async () => {
@@ -201,5 +240,21 @@ describe('firmwareReleaseService', () => {
       where: { id: 1 },
       data: { is_active: false },
     });
+  });
+
+  test('setReleaseActive rejects activating http artifact URLs in production', async () => {
+    process.env.NODE_ENV = 'production';
+    prisma.firmwareRelease.findFirst.mockResolvedValue({
+      id: 1,
+      artifact_url: 'http://firmware.example.test/esp32.bin',
+      is_active: false,
+    });
+    const { setReleaseActive } = require('../services/firmwareReleaseService');
+
+    await expect(setReleaseActive(1, true)).rejects.toMatchObject({
+      code: 40000,
+      message: 'active production firmware releases require https artifact_url',
+    });
+    expect(prisma.firmwareRelease.update).not.toHaveBeenCalled();
   });
 });

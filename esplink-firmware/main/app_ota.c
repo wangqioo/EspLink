@@ -1,6 +1,8 @@
 #include "app_ota.h"
+#include "app_boot_signing.h"
 #include "app_device.h"
 #include "board_config.h"
+#include "esp_crt_bundle.h"
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -279,6 +281,13 @@ static esp_err_t app_ota_report_result(const app_ota_update_t *update,
         return ESP_ERR_INVALID_ARG;
     }
 
+#if CONFIG_ESPLINK_PRODUCTION_TRANSPORT
+    if (!is_https_url(url)) {
+        ESP_LOGE(TAG, "production transport requires HTTPS OTA result url: %s", url);
+        return ESP_ERR_INVALID_ARG;
+    }
+#endif
+
     char body[768];
     int written = snprintf(body,
                            sizeof(body),
@@ -326,9 +335,32 @@ static esp_err_t app_ota_report_result(const app_ota_update_t *update,
     body[used++] = '}';
     body[used] = '\0';
 
+    app_boot_signature_t signature;
+    char nonce[32] = {0};
+    char signature_hex[65] = {0};
+    esp_err_t sign_err = app_boot_signing_build(&signature,
+                                                nonce,
+                                                sizeof(nonce),
+                                                signature_hex,
+                                                sizeof(signature_hex));
+    if (sign_err == ESP_OK) {
+        sign_err = app_boot_signing_append_json(body, sizeof(body), &signature);
+        if (sign_err != ESP_OK) {
+            ESP_LOGE(TAG, "failed to append OTA result signature: %s", esp_err_to_name(sign_err));
+            return sign_err;
+        }
+        ESP_LOGI(TAG, "OTA result signature enabled nonce=%s", nonce);
+    } else if (sign_err == ESP_ERR_NOT_FOUND) {
+        ESP_LOGD(TAG, "OTA result signature disabled for development");
+    } else {
+        ESP_LOGE(TAG, "OTA result signature failed: %s", esp_err_to_name(sign_err));
+        return sign_err;
+    }
+
     esp_http_client_config_t cfg = {
         .url = url,
         .transport_type = transport_for_url(url),
+        .crt_bundle_attach = esp_crt_bundle_attach,
         .skip_cert_common_name_check = false,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
@@ -482,6 +514,7 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         .http_config = &(esp_http_client_config_t){
             .url                     = update->url,
             .transport_type          = transport_for_url(update->url),
+            .crt_bundle_attach       = esp_crt_bundle_attach,
             .skip_cert_common_name_check = false,
         },
     };
