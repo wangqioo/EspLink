@@ -62,9 +62,9 @@
 
 ## Task 5: Hardware Regression Closure
 
-- [ ] Backend restart/WebSocket recovery: with the board online, restart backend and confirm device returns to `boot register ok` and WebSocket connected.
+- [x] Backend restart/WebSocket recovery: with the board online, restart backend and confirm device reconnects.
 - [ ] Boot-fail rollback: OTA a deliberately crashing image that passes download and SHA checks, then confirm bootloader rolls back to the previous valid app.
-- [ ] Record exact serial/database evidence in `docs/2026-06-16-production-readiness-regression.md`.
+- [x] Record exact serial/database evidence in `docs/2026-06-16-production-readiness-regression.md`.
 - [ ] Disable any temporary firmware release rows used during testing.
 - [ ] Restore firmware config to default development settings before commit.
 

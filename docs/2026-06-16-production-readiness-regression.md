@@ -345,6 +345,29 @@ boot register ok
 app_ws: WebSocket connected
 ```
 
+2026-06-20 hardware result: PASS on `/dev/cu.usbmodem112301`,
+MAC `10:51:DB:80:E2:E8`, SN `MAC-1051DB80E2E8`.
+
+Evidence:
+
+```text
+boot register ok, is_bound=1
+app_ws: WebSocket connected
+server msg: {"type":"hello_ack","is_bound":true}
+transport_ws: Error connecting to host 192.168.1.26:8088
+websocket_client: Reconnect after 5000 ms
+app_ws: WebSocket disconnected
+main: server disconnected
+[WS] device connected: 10:51:DB:80:E2:E8
+```
+
+Observation: after backend stop the firmware stayed alive and retried the
+WebSocket connection every 5 seconds. After the backend restarted, backend logs
+recorded the same device MAC reconnecting. The serial monitor produced heavy
+display-loop output and disconnected before capturing the final `hello_ack` line
+after restart, so the accepted recovery evidence is the paired firmware-side
+retry loop plus backend-side reconnect record.
+
 ## Completion Criteria
 
 - Backend `npm test` passes.

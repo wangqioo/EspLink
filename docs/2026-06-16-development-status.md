@@ -618,6 +618,7 @@ API 路径：
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
 - OTA 完整性校验：正确 SHA256 接受路径和错误 SHA256 拒绝路径均已完成真机验证。
 - OTA 下载失败恢复：下载中断真机负向验证已完成，设备会上报 `download_failed` 并恢复到上一有效固件。
+- 后端重启 / WebSocket 恢复：2026-06-20 已用 `/dev/cu.usbmodem112301`、MAC `10:51:DB:80:E2:E8` 完成真机验证；固件断线后进入 5 秒重连循环，后端重启后记录同一设备重新连接。
 - OTA 回滚确认：OTA app valid 和 forced OTA 正向路径已完成真机验证；boot fail 后的自动回滚路径仍需负向验证。
 
 ### 建议继续验证
@@ -627,7 +628,7 @@ API 路径：
 - 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
 - 下载中断：一次性中断 artifact 服务、runbook 和真机验证均已完成；设备上报 `download_failed` 并恢复到上一有效固件。
 - 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。
-- 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性仍需继续观察。
+- 长时间在线：路由器断开、WebSocket 重连、业务心跳稳定性仍需继续观察；后端重启恢复已完成一次真机验证。
 
 ### 体验优化
 
