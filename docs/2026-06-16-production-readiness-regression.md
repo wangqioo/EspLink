@@ -178,6 +178,15 @@ correct backend artifact SHA256. As of `1.0.4`, correct raw artifact SHA256 is
 accepted on hardware. As of `1.0.5`, firmware also restores the current running
 partition as the boot target when raw artifact SHA256 verification fails.
 
+2026-06-19 hardware result: passed on `/dev/cu.usbmodem112301` with device
+`10:51:DB:80:E2:E8`. A temporary inactive-after-test release `1.0.6` pointed at
+the known-good `esplink-v1-1.0.5.bin` artifact but used an all-zero SHA256.
+The device reported `sha_mismatch` with `ESP_ERR_INVALID_CRC`, restored the
+running partition as boot target, and rebooted back into factory offset
+`0x20000` running `fw=1.0.5`. Backend `firmware_ota_attempts` recorded
+`status=sha_mismatch`; the temporary release was reset to `is_active=0` and
+`force_update=0`.
+
 ## 6.1 Invalid Firmware Uploads
 
 Automated coverage:

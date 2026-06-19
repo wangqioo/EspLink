@@ -240,7 +240,7 @@ npm run build
 下一步：
 
 - 管理后台设备详情页展示最近 OTA attempt 和 WebSocket 在线状态。（已完成基础详情抽屉和后端字段）
-- 增加 wrong SHA256 真机负向测试，确认固件上报 `sha_mismatch` 且不切换不可信镜像。（已完成固件恢复 boot target 保护，待真机复测）
+- 增加 wrong SHA256 真机负向测试，确认固件上报 `sha_mismatch` 且不切换不可信镜像。（已完成真机验证，见 2026-06-19 记录）
 - 增加 interrupted download 真机负向测试，确认固件保持当前有效版本并记录失败原因。
 - 生产签名模式真机回归：`REQUIRE_DEVICE_PSK=true` + `CONFIG_ESPLINK_BOOT_SIGNATURE_REQUIRED=y`。
 - 准备下一版验证固件时，建议使用 `1.0.6`，避免与已验证的 `1.0.5` 发布记录混淆。
@@ -275,6 +275,28 @@ npm run build
 ```
 
 结果：构建通过；Vite 仍提示主 chunk 超过 500 KB，这是当前后台已有体积问题。
+
+## 2026-06-19 wrong SHA256 真机负向验证
+
+已完成：
+
+- 先擦除并重新烧录 `/dev/cu.usbmodem112301`，确认板上分区表恢复为 EspLink OTA 布局：`factory=0x20000`、`ota_0=0x1a0000`、`ota_1=0x320000`。
+- 设备启动确认：`board=esplink-v1 fw=1.0.5`，MAC `10:51:DB:80:E2:E8`，WiFi IP `192.168.1.32`。
+- 创建本地临时发布 `esplink-v1 / 1.0.6`，artifact URL 指向已验证的 `esplink-v1-1.0.5.bin`，SHA256 设置为全 0，用于验证错误 digest 拒绝路径。
+- 设备下载 artifact 到 `ota_0` 后拒绝升级：
+
+```text
+app_ota: OTA target version=1.0.6 force=0 size=1266528
+app_ota: OTA target sha256 0000000000000000...
+app_ota: OTA SHA256 mismatch expected=0000000000000000000000000000000000000000000000000000000000000000 actual=56b60bf1bf5b1e391e2476416b40a14565a6b19b38c5c9a537bf3222fbe1f1ed
+app_ota: OTA integrity verification failed: ESP_ERR_INVALID_CRC
+app_ota: restored running partition as boot target after OTA integrity failure
+app_ota: OTA result reported: sha_mismatch
+```
+
+- 设备重启后 bootloader 继续选择 factory app：`Loaded app from partition at offset 0x20000`，随后再次输出 `board=esplink-v1 fw=1.0.5`，未切换到未信任镜像。
+- 数据库 `firmware_ota_attempts` 已写入 `sha_mismatch`，最近记录包括 id `21`、`20`、`19`，`error_code=sha_mismatch`、`error_message=ESP_ERR_INVALID_CRC`、`bytes_written=1266528`。
+- 临时错误发布 `firmware_releases.id=6 / version=1.0.6` 已恢复为 `is_active=0`、`force_update=0`，避免设备继续重复 OTA。
 
 ## 已验证主链路
 
@@ -464,7 +486,7 @@ API 路径：
 - 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
 - HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
-- OTA 完整性校验：正确 SHA256 接受路径已完成真机验证；错误 SHA256 拒绝路径仍需负向验证。
+- OTA 完整性校验：正确 SHA256 接受路径和错误 SHA256 拒绝路径均已完成真机验证。
 - OTA 回滚确认：OTA app valid 和 forced OTA 正向路径已完成真机验证；boot fail 后的自动回滚路径仍需负向验证。
 
 ### 建议继续验证
