@@ -37,6 +37,7 @@
 - [x] Mark interrupted download as hardware-validated.
 - [x] Keep HTTPS/WSS true-domain validation as environment-gated.
 - [x] Keep boot-fail rollback and backend restart/WebSocket recovery as the next hardware checks until executed.
+- [x] Mark boot-fail rollback and backend restart/WebSocket recovery complete after hardware validation.
 
 ## Task 2: Production Security Design
 
@@ -63,10 +64,10 @@
 ## Task 5: Hardware Regression Closure
 
 - [x] Backend restart/WebSocket recovery: with the board online, restart backend and confirm device reconnects.
-- [ ] Boot-fail rollback: OTA a deliberately crashing image that passes download and SHA checks, then confirm bootloader rolls back to the previous valid app.
+- [x] Boot-fail rollback: OTA a deliberately crashing image that passes download and SHA checks, then confirm bootloader rolls back to the previous valid app.
 - [x] Record exact serial/database evidence in `docs/2026-06-16-production-readiness-regression.md`.
-- [ ] Disable any temporary firmware release rows used during testing.
-- [ ] Restore firmware config to default development settings before commit.
+- [x] Disable any temporary firmware release rows used during testing.
+- [x] Restore firmware config to default development settings before commit.
 
 ## Task 6: Verification And Publish
 

@@ -332,6 +332,43 @@ device boot: board=esplink-v1 fw=<previous-version>
 Expected outcome: device returns online on the previous valid firmware and
 does not remain stuck on the failed image.
 
+2026-06-20 hardware result: PASS on `/dev/cu.usbmodem112301`,
+MAC `10:51:DB:80:E2:E8`, SN `MAC-1051DB80E2E8`.
+
+Temporary release `id=8 / version=1.0.8` used artifact
+`http://192.168.1.26:8088/firmware/esplink-v1-1.0.8-bootfail.bin`,
+SHA256 `0cadde9c8535b3c1465561c51862ae61e86de57b8842c388b9c6dc3ac81369b1`,
+and `size_bytes=219264`. The image was built only for this rollback test: it
+kept `board_type=esplink-v1`, reported firmware `1.0.8`, then aborted before
+the app could confirm the OTA boot as valid.
+
+Evidence:
+
+```text
+OTA target version=1.0.8
+OTA artifact SHA256 verified 0cadde9c8535b3c1...
+OTA success, restarting
+OTA result reported: success
+boot: Loaded app from partition at offset 0x1a0000
+main: === device boot: board=esplink-v1 fw=1.0.8 ===
+boot-fail rollback validation image aborting before OTA validation
+abort() was called
+boot: Defaulting to factory image
+boot: Loaded app from partition at offset 0x20000
+main: === device boot: board=esplink-v1 fw=1.0.5 ===
+boot register ok, is_bound=1
+app_ws: WebSocket connected
+server msg: {"type":"hello_ack","is_bound":true}
+```
+
+Observation: the OTA transport and SHA verification completed successfully, so
+the backend OTA attempt records the install as `success`. The rollback decision
+is verified by the bootloader and device logs: the test image failed before
+`app_ota_mark_running_valid()`, the bootloader rejected the pending OTA image,
+and the device returned online on the previous valid `1.0.5` factory app. The
+temporary release was disabled after validation, and the board was re-flashed
+with default development firmware with `CONFIG_ESPLINK_TEST_AUTO_WIFI` disabled.
+
 ## 9. Backend Restart And WebSocket Recovery
 
 With the device online, restart the backend.
