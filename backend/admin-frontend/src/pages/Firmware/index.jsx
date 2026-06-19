@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Table, Button, Form, Input, InputNumber, Modal, Row, Col, Select, Space, Switch, Tag, Typography, message, Tooltip, Upload } from 'antd';
+import { Alert, Table, Button, Form, Input, InputNumber, Modal, Row, Col, Select, Space, Switch, Tag, Typography, message, Tooltip, Upload } from 'antd';
 import { PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
-import { createFirmwareRelease, getFirmwareReleases, setFirmwareReleaseActive, uploadFirmwareArtifact } from '../../api';
+import { createFirmwareRelease, getFirmwareReleases, previewFirmwareOta, setFirmwareReleaseActive, uploadFirmwareArtifact } from '../../api';
 import dayjs from 'dayjs';
 
 const DEFAULT_CHANNEL = 'stable';
@@ -63,6 +63,19 @@ function renderOtaSummary(summary) {
   );
 }
 
+function buildRepresentativeFirmwareVersion(version, forceUpdate) {
+  if (forceUpdate) return version;
+  const match = String(version || '').match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) return '0.0.0';
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (patch > 0) return `${major}.${minor}.${patch - 1}`;
+  if (minor > 0) return `${major}.${minor - 1}.0`;
+  if (major > 0) return `${major - 1}.0.0`;
+  return '0.0.0';
+}
+
 export default function Firmware() {
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
@@ -72,7 +85,18 @@ export default function Firmware() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingArtifact, setUploadingArtifact] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [createdRelease, setCreatedRelease] = useState(null);
   const [form] = Form.useForm();
+  const watchedBoardType = Form.useWatch('board_type', form);
+  const watchedVersion = Form.useWatch('version', form);
+  const watchedChannel = Form.useWatch('channel', form);
+
+  const duplicateRelease = data.find((item) => (
+    item.board_type === watchedBoardType
+    && item.version === watchedVersion
+    && item.channel === (watchedChannel || DEFAULT_CHANNEL)
+  ));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -90,6 +114,8 @@ export default function Firmware() {
   function openCreate() {
     form.resetFields();
     setUploadingArtifact(false);
+    setPreview(null);
+    setCreatedRelease(null);
     form.setFieldsValue({
       channel: DEFAULT_CHANNEL,
       is_active: true,
@@ -102,20 +128,31 @@ export default function Firmware() {
     const values = await form.validateFields();
     setSubmitting(true);
     try {
-      await createFirmwareRelease({
+      const res = await createFirmwareRelease({
         ...values,
         release_notes: values.release_notes || null,
         size_bytes: values.size_bytes ?? null,
       });
       message.success('固件发布已创建');
-      setModalOpen(false);
+      setCreatedRelease(res.data);
       setPage(1);
-      load();
+      await load();
+      await loadPreview({
+        board_type: values.board_type,
+        firmware_version: buildRepresentativeFirmwareVersion(values.version, values.force_update),
+        channel: values.channel || DEFAULT_CHANNEL,
+      });
     } catch (err) {
       message.error(err?.message || '创建失败');
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function closeCreateModal() {
+    setModalOpen(false);
+    setPreview(null);
+    setCreatedRelease(null);
   }
 
   async function onArtifactSelected(file) {
@@ -148,6 +185,21 @@ export default function Firmware() {
   }
 
   async function onToggle(record, checked) {
+    if (!checked) {
+      const ok = await new Promise((resolve) => {
+        Modal.confirm({
+          title: '停用固件发布',
+          content: `确认停用 ${record.board_type} / ${record.version}？停用后设备不会再收到该版本 OTA。`,
+          okText: '停用',
+          okButtonProps: { danger: true },
+          cancelText: '取消',
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!ok) return;
+    }
+
     try {
       await setFirmwareReleaseActive(record.id, checked);
       message.success(checked ? '已启用' : '已停用');
@@ -155,6 +207,53 @@ export default function Firmware() {
     } catch (err) {
       message.error(err?.message || '操作失败');
     }
+  }
+
+  async function loadPreview({ board_type, firmware_version, channel }) {
+    if (!board_type || !firmware_version) return;
+    try {
+      const res = await previewFirmwareOta({
+        board_type,
+        firmware_version,
+        channel: channel || DEFAULT_CHANNEL,
+      });
+      setPreview(res.data);
+    } catch (err) {
+      setPreview({ error: err?.message || 'OTA 预览失败' });
+    }
+  }
+
+  function renderPreview() {
+    if (!preview) return null;
+    if (preview.error) {
+      return <Alert type="error" showIcon message={preview.error} style={{ marginTop: 16 }} />;
+    }
+    if (preview.update_available) {
+      return (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginTop: 16 }}
+          message={`OTA 预览：当前 ${preview.firmware_version} 的 ${preview.board_type} 设备会收到 ${preview.ota.version}`}
+          description={preview.ota.force ? '该发布为强制升级，同版本设备也会收到 OTA。' : '仅低于目标版本的设备会收到 OTA。'}
+        />
+      );
+    }
+    const reasonText = {
+      no_active_release: '没有匹配的启用发布',
+      release_not_newer: '候选发布不高于当前版本',
+      firmware_version_invalid: '当前版本格式无效',
+      board_type_missing: '缺少板型',
+    }[preview.reason] || preview.reason || '不会触发 OTA';
+    return (
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginTop: 16 }}
+        message={`OTA 预览：不会触发升级`}
+        description={reasonText}
+      />
+    );
   }
 
   const columns = [
@@ -248,12 +347,13 @@ export default function Firmware() {
       <Modal
         title="新建固件发布"
         open={modalOpen}
-        onOk={onSubmit}
+        onOk={createdRelease ? closeCreateModal : onSubmit}
+        okText={createdRelease ? '完成' : '创建'}
         okButtonProps={{ loading: submitting, disabled: uploadingArtifact }}
-        onCancel={() => setModalOpen(false)}
+        onCancel={closeCreateModal}
         width={680}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" disabled={!!createdRelease} style={{ marginTop: 16 }}>
           <Form.Item label="固件文件">
             <Upload
               accept=".bin"
@@ -281,6 +381,15 @@ export default function Firmware() {
               </Form.Item>
             </Col>
           </Row>
+          {duplicateRelease && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`已存在 ${duplicateRelease.board_type} / ${duplicateRelease.version} / ${duplicateRelease.channel}`}
+              description="同一板型、渠道和版本不能重复创建。需要重新发布时请先停用旧记录，并使用更高版本号或强制升级。"
+            />
+          )}
           <Form.Item name="artifact_url" label="固件地址" rules={[{ required: true, message: '请输入固件地址' }]}>
             <Input placeholder="上传固件后自动填入，也可手动输入 URL" />
           </Form.Item>
@@ -307,6 +416,7 @@ export default function Firmware() {
           <Form.Item name="release_notes" label="发布说明">
             <Input.TextArea rows={3} placeholder="可选" />
           </Form.Item>
+          {renderPreview()}
         </Form>
       </Modal>
     </div>

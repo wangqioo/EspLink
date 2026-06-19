@@ -37,6 +37,55 @@ function buildUpdateResponse({ device, device_key, wsBase, release }) {
   };
 }
 
+function buildPreviewResponse({ boardType, firmwareVersion, release }) {
+  const base = {
+    board_type: boardType,
+    firmware_version: firmwareVersion,
+    update_available: false,
+    reason: null,
+    ota: null,
+  };
+
+  if (!boardType) {
+    return { ...base, reason: 'board_type_missing' };
+  }
+
+  if (!firmwareVersion) {
+    return { ...base, reason: 'firmware_version_invalid' };
+  }
+
+  if (!release) {
+    return { ...base, reason: 'no_active_release' };
+  }
+
+  if (!release.force_update && compareVersions(release.version, firmwareVersion) <= 0) {
+    return {
+      ...base,
+      reason: 'release_not_newer',
+      candidate_release: {
+        id: release.id,
+        version: release.version,
+        force: Boolean(release.force_update),
+      },
+    };
+  }
+
+  return {
+    ...base,
+    update_available: true,
+    reason: 'update_available',
+    ota: {
+      version: release.version,
+      url: release.artifact_url,
+      sha256: release.sha256,
+      size_bytes: release.size_bytes ?? null,
+      force: Boolean(release.force_update),
+      release_id: release.id,
+      release_notes: release.release_notes ?? null,
+    },
+  };
+}
+
 function getWebSocketBaseUrl() {
   return process.env.WS_BASE_URL || `ws://localhost:${process.env.PORT || 8088}`;
 }
@@ -77,4 +126,20 @@ async function checkBootReport({ mac, board_type, firmware_version }) {
   }
 }
 
-module.exports = { checkBootReport, getWebSocketBaseUrl };
+async function previewOtaDecision({ board_type, firmware_version, channel = 'stable' }) {
+  const boardType = normalizeBoardType(board_type);
+  const currentVersion = normalizeVersion(firmware_version);
+
+  if (!boardType || !currentVersion) {
+    return buildPreviewResponse({ boardType, firmwareVersion: currentVersion, release: null });
+  }
+
+  const release = await firmwareReleaseService.findLatestActiveRelease({
+    boardType,
+    channel,
+  });
+
+  return buildPreviewResponse({ boardType, firmwareVersion: currentVersion, release });
+}
+
+module.exports = { checkBootReport, getWebSocketBaseUrl, previewOtaDecision };

@@ -49,15 +49,22 @@
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.06);
+  gap: 20rpx;
 }
 .card-left {
   display: flex;
   align-items: center;
   flex: 1;
+  min-width: 0;
 }
 .device-icon {
   font-size: 64rpx;
   margin-right: 24rpx;
+  flex-shrink: 0;
+}
+.device-info {
+  min-width: 0;
+  flex: 1;
 }
 .device-name {
   display: block;
@@ -65,16 +72,41 @@
   font-weight: 600;
   color: #1a1a2e;
   margin-bottom: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.device-type {
-  display: block;
+.device-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+.meta-pill {
+  display: inline-flex;
+  max-width: 220rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  background: #eef2f7;
   font-size: 24rpx;
-  color: #999;
+  line-height: 32rpx;
+  color: #5f6b7a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta-pill.bound {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+.meta-pill.unbound {
+  background: #fff4e5;
+  color: #9a5b00;
 }
 .card-right {
   display: flex;
   align-items: center;
   gap: 8rpx;
+  flex-shrink: 0;
 }
 .status-dot {
   width: 16rpx;

@@ -129,12 +129,33 @@
   margin-top: 32rpx;
   text-align: center;
 }
+.error-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #b71c1c;
+  margin-bottom: 12rpx;
+}
 .error-text { display: block; font-size: 28rpx; color: #e53935; margin-bottom: 24rpx; }
+.error-actions {
+  display: flex;
+  gap: 16rpx;
+}
 .btn-retry {
+  flex: 1;
   font-size: 28rpx;
   color: #e53935;
-  background: none;
+  background: #fff;
   border: 1rpx solid #e53935;
   border-radius: 16rpx;
-  padding: 16rpx 48rpx;
+  padding: 16rpx 0;
+}
+.btn-secondary {
+  flex: 1;
+  font-size: 28rpx;
+  color: #555;
+  background: #fff;
+  border: 1rpx solid #ddd;
+  border-radius: 16rpx;
+  padding: 16rpx 0;
 }

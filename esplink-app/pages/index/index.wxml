@@ -30,13 +30,17 @@
       <view class="card-left">
         <view class="device-icon">📦</view>
         <view class="device-info">
-          <text class="device-name">{{item.alias || item.board_type}}</text>
-          <text class="device-type">{{item.board_type}}</text>
+          <text class="device-name">{{item.displayName}}</text>
+          <view class="device-meta">
+            <text class="meta-pill">{{item.boardText}}</text>
+            <text class="meta-pill">固件 {{item.firmwareText}}</text>
+            <text class="meta-pill {{item.bindingText === '已绑定' ? 'bound' : 'unbound'}}">{{item.bindingText}}</text>
+          </view>
         </view>
       </view>
       <view class="card-right">
         <view class="status-dot {{item.is_online ? 'online' : 'offline'}}"></view>
-        <text class="status-text">{{item.is_online ? '在线' : '离线'}}</text>
+        <text class="status-text">{{item.onlineText}}</text>
         <text class="arrow">›</text>
       </view>
     </view>

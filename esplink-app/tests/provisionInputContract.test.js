@@ -38,3 +38,18 @@ test('provision page auto-fills the current WiFi SSID without changing password 
   assert.match(js, /this\._ssid\s*=\s*ssid/)
   assert.match(js, /this\.setData\(\{\s*ssid,\s*canSubmit:\s*!!this\._ssid\s*&&\s*!!this\._password\s*\}\)/)
 })
+
+test('provision page exposes explicit failure retry and scan actions', () => {
+  assert.match(js, /failureMode:\s*false/)
+  assert.match(js, /failureMode:\s*true/)
+  assert.match(js, /onRetry\(\)/)
+  assert.match(js, /onBackToScan\(\)/)
+  assert.match(js, /wx\.redirectTo\(\{\s*url:\s*'\/pages\/scan\/scan'\s*\}\)/)
+
+  assert.match(wxml, /wx:if="\{\{step === 1 && !failureMode\}\}"/)
+  assert.match(wxml, /wx:if="\{\{failureMode && errorMsg\}\}"/)
+  assert.match(wxml, /bindtap="onRetry"[\s\S]*重试当前设备/)
+  assert.match(wxml, /bindtap="onBackToScan"[\s\S]*返回扫描/)
+
+  assert.match(cssBlock('.error-actions'), /display:\s*flex/)
+})

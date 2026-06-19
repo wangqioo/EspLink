@@ -14,6 +14,7 @@ Page({
     sending:     false,
     statusText:  '',
     errorMsg:    '',
+    failureMode: false,
   },
 
   // 密码不走 setData，避免原生 input 组件被框架重置
@@ -37,7 +38,7 @@ Page({
   _connect() {
     this._ssid = ''
     this._password = ''
-    this.setData({ step: 0, ssid: '', canSubmit: false, errorMsg: '' })
+    this.setData({ step: 0, ssid: '', canSubmit: false, errorMsg: '', failureMode: false })
     ble.connect(this.data.deviceId)
       .then(() => new Promise(r => setTimeout(r, 800)))
       .then(() => ble.getServices(this.data.deviceId))
@@ -49,7 +50,7 @@ Page({
         this._fillCurrentWifiSSID()
       })
       .catch(e => {
-        this.setData({ errorMsg: e.message || '连接设备失败' })
+        this.setData({ failureMode: true, errorMsg: e.message || '连接设备失败' })
       })
   },
 
@@ -87,12 +88,13 @@ Page({
           this.setData({
             step:     1,
             sending:  false,
+            failureMode: true,
             errorMsg: '配网超时，请检查 WiFi 密码是否正确后重试',
           })
         }, PROVISION_TIMEOUT_MS)
       })
       .catch(e => {
-        this.setData({ step: 1, sending: false, errorMsg: '发送失败：' + e.message })
+        this.setData({ step: 1, sending: false, failureMode: true, errorMsg: '发送失败：' + e.message })
       })
   },
 
@@ -114,7 +116,7 @@ Page({
       this._cleanup()
       wx.redirectTo({ url: '/pages/success/success' })
     } else {
-      this.setData({ step: 1, sending: false, errorMsg: result.message })
+      this.setData({ step: 1, sending: false, failureMode: true, errorMsg: result.message })
     }
   },
 
@@ -124,7 +126,11 @@ Page({
   },
 
   onRetry() {
-    this.setData({ errorMsg: '' })
+    this.setData({ errorMsg: '', failureMode: false })
     this._connect()
+  },
+
+  onBackToScan() {
+    wx.redirectTo({ url: '/pages/scan/scan' })
   },
 })

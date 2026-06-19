@@ -20,7 +20,12 @@ jest.mock('../services/firmwareReleaseService', () => ({
   setReleaseActive: jest.fn(),
 }));
 
+jest.mock('../services/otaCheckService', () => ({
+  previewOtaDecision: jest.fn(),
+}));
+
 const firmwareReleaseService = require('../services/firmwareReleaseService');
+const otaCheckService = require('../services/otaCheckService');
 
 function makeEspImage(size = 32) {
   const buffer = Buffer.alloc(size, 0);
@@ -110,6 +115,41 @@ describe('firmware admin routes', () => {
     expect(res.status).toBe(201);
     expect(firmwareReleaseService.createRelease).toHaveBeenCalledWith(payload);
     expect(res.body.data.version).toBe('2.5.0');
+  });
+
+  test('previews OTA decision without device registration side effects', async () => {
+    otaCheckService.previewOtaDecision.mockResolvedValue({
+      board_type: 'esplink-v1',
+      firmware_version: '1.0.5',
+      update_available: true,
+      reason: 'update_available',
+      ota: { version: '1.0.6', release_id: 6 },
+    });
+
+    const res = await request(app)
+      .get('/api/v1/firmware/ota-preview')
+      .query({ board_type: 'esplink-v1', firmware_version: '1.0.5', channel: 'stable' });
+
+    expect(res.status).toBe(200);
+    expect(otaCheckService.previewOtaDecision).toHaveBeenCalledWith({
+      board_type: 'esplink-v1',
+      firmware_version: '1.0.5',
+      channel: 'stable',
+    });
+    expect(res.body.data).toMatchObject({
+      update_available: true,
+      ota: { version: '1.0.6' },
+    });
+  });
+
+  test('validates required OTA preview query fields', async () => {
+    const res = await request(app)
+      .get('/api/v1/firmware/ota-preview')
+      .query({ board_type: 'esplink-v1' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('board_type and firmware_version are required');
+    expect(otaCheckService.previewOtaDecision).not.toHaveBeenCalled();
   });
 
   test('validates required create fields before service call', async () => {

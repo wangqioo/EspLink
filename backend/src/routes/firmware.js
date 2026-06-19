@@ -6,6 +6,7 @@ const {
   listReleases,
   setReleaseActive,
 } = require('../services/firmwareReleaseService');
+const { previewOtaDecision } = require('../services/otaCheckService');
 const { saveFirmwareArtifact } = require('../services/firmwareArtifactService');
 
 const router = express.Router();
@@ -56,6 +57,20 @@ router.post('/releases', async (req, res, next) => {
   } catch (err) {
     if (err.code === 40000) return res.status(400).json(error(err.code, err.message));
     if (err.code === 40900) return res.status(409).json(error(err.code, err.message));
+    next(err);
+  }
+});
+
+router.get('/ota-preview', async (req, res, next) => {
+  try {
+    const { board_type, firmware_version, channel } = req.query || {};
+    if (!board_type || !firmware_version) {
+      return res.status(400).json(error(40000, 'board_type and firmware_version are required'));
+    }
+
+    const preview = await previewOtaDecision({ board_type, firmware_version, channel });
+    res.json(success(preview));
+  } catch (err) {
     next(err);
   }
 });

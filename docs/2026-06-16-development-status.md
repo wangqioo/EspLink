@@ -613,26 +613,32 @@ API 路径：
 
 ### 必做
 
-- 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件启动注册和 OTA 结果上报均支持签名；仍需实机验证生产 PSK 配置。
+- 生产设备签名：后端 `REQUIRE_DEVICE_PSK=true`、固件启动注册签名、OTA 结果签名均已完成本地硬件验证；生产发货前还需切换到制造注入的 per-device PSK，不能使用本地临时 PSK。
 - HTTPS/WSS：生产环境传输强制和 crt bundle 接入已完成代码准备；仍需使用真实 HTTPS/WSS 域名做真机验证。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
 - OTA 完整性校验：正确 SHA256 接受路径和错误 SHA256 拒绝路径均已完成真机验证。
+- OTA 下载失败恢复：下载中断真机负向验证已完成，设备会上报 `download_failed` 并恢复到上一有效固件。
 - OTA 回滚确认：OTA app valid 和 forced OTA 正向路径已完成真机验证；boot fail 后的自动回滚路径仍需负向验证。
 
 ### 建议继续验证
 
 - 生产化回归：按 [Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md) 验证签名注册、SHA256 OTA、断线恢复。
-- 强制升级：`force_update=true` 服务端决策已补自动化测试；真机执行已暴露固件回滚确认问题，需先修复再复测。
+- 强制升级：`force_update=true` 服务端决策和真机同版本强制 OTA 均已验证。
 - 错误 bin：空 bin、非 ESP image、超大 bin 已补上传接口自动化测试；非 ESP32-S3 app 和 boot fail 仍需真机验证。
 - 下载中断：一次性中断 artifact 服务、runbook 和真机验证均已完成；设备上报 `download_failed` 并恢复到上一有效固件。
 - 回滚策略：OTA boot fail 后的恢复路径，按 runbook 真机执行。
-- 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性。
+- 长时间在线：后端重启、路由器断开、WebSocket 重连、业务心跳稳定性仍需继续观察。
 
 ### 体验优化
 
-- 管理后台固件发布页面增加重复版本提示、旧版本停用快捷操作、发布后 OTA check 预览。
-- 小程序设备列表显示在线状态、固件版本、板型和绑定状态。
-- 配网页面输入框渲染已做稳定布局修复并增加静态回归测试；SSID 自动填充已重新接入配网流程。两项仍需微信开发者工具和 iOS 真机复测。
+- 管理后台固件发布页面已补重复版本提示、停用确认和只读 OTA check 预览。
+- 小程序设备列表已补在线状态、固件版本、板型和绑定状态展示。
+- 配网页面输入框渲染已做稳定布局修复，SSID 自动填充已重新接入配网流程，失败态已补重试当前设备和返回扫描入口；仍需微信开发者工具和 iOS 真机复测。
+
+### 生产安全设计
+
+- 生产 PSK 存储、证书/域名生命周期和 key rotation 操作模型记录在 [Production Security Design](./2026-06-19-production-security-design.md)。
+- 当前推荐路径：制造阶段注入 per-device PSK，生产固件启用签名强制，发货前启用 flash encryption；本地编译期 PSK 只用于验证。
 
 ## 提交注意
 

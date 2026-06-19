@@ -19,7 +19,21 @@ Page({
   async _loadDevices() {
     try {
       const { devices } = await api.getDeviceList()
-      this.setData({ devices, loading: false, refreshing: false })
+      this.setData({
+        devices: devices.map(device => {
+          const isBound = Boolean(device.wechat_user_id || device.is_bound)
+          return {
+            ...device,
+            displayName: device.alias || device.board_type || device.mac_address || '未命名设备',
+            firmwareText: device.firmware || device.firmware_version || '未知版本',
+            boardText: device.board_type || '未知板型',
+            bindingText: isBound ? '已绑定' : '未绑定',
+            onlineText: device.is_online ? '在线' : '离线',
+          }
+        }),
+        loading: false,
+        refreshing: false,
+      })
     } catch (e) {
       wx.showToast({ title: e.message, icon: 'none' })
       this.setData({ loading: false, refreshing: false })

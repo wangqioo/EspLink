@@ -30,7 +30,7 @@
     <text class="progress-text">正在连接设备...</text>
   </view>
 
-  <view class="form" wx:if="{{step === 1}}">
+  <view class="form" wx:if="{{step === 1 && !failureMode}}">
     <view class="form-item">
       <text class="form-label">WiFi 名称</text>
       <input
@@ -69,9 +69,13 @@
     <text class="progress-sub">设备正在连接 WiFi，请稍候...</text>
   </view>
 
-  <view class="error-card" wx:if="{{errorMsg}}">
-    <text class="error-text">⚠️ {{errorMsg}}</text>
-    <button class="btn-retry" bindtap="onRetry">重试</button>
+  <view class="error-card" wx:if="{{failureMode && errorMsg}}">
+    <text class="error-title">配网失败</text>
+    <text class="error-text">{{errorMsg}}</text>
+    <view class="error-actions">
+      <button class="btn-retry" bindtap="onRetry">重试当前设备</button>
+      <button class="btn-secondary" bindtap="onBackToScan">返回扫描</button>
+    </view>
   </view>
 
 </view>

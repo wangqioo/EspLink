@@ -56,6 +56,7 @@ export const uploadFirmwareArtifact = (file) => api.post('/firmware/artifacts', 
 });
 export const createFirmwareRelease = (data) => api.post('/firmware/releases', data);
 export const setFirmwareReleaseActive = (id, is_active) => api.patch(`/firmware/releases/${id}/active`, { is_active });
+export const previewFirmwareOta = (params) => api.get('/firmware/ota-preview', { params });
 
 // Usage
 export const getUsageSummary = (params) => api.get('/usage/summary', { params });

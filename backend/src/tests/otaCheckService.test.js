@@ -236,6 +236,65 @@ describe('otaCheckService', () => {
     });
   });
 
+  test('previews OTA update without registering the device', async () => {
+    firmwareReleaseService.findLatestActiveRelease.mockResolvedValue({
+      id: 9,
+      version: '1.0.6',
+      artifact_url: 'https://firmware.example.test/esplink.bin',
+      sha256: 'c'.repeat(64),
+      size_bytes: 4096,
+      force_update: false,
+      release_notes: 'preview',
+    });
+    const { previewOtaDecision } = require('../services/otaCheckService');
+
+    const result = await previewOtaDecision({
+      board_type: ' esplink-v1 ',
+      firmware_version: 'v1.0.5',
+      channel: 'stable',
+    });
+
+    expect(wechatService.bootRegister).not.toHaveBeenCalled();
+    expect(firmwareReleaseService.findLatestActiveRelease).toHaveBeenCalledWith({
+      boardType: 'esplink-v1',
+      channel: 'stable',
+    });
+    expect(result).toMatchObject({
+      board_type: 'esplink-v1',
+      firmware_version: '1.0.5',
+      update_available: true,
+      reason: 'update_available',
+      ota: {
+        version: '1.0.6',
+        release_id: 9,
+      },
+    });
+  });
+
+  test('previews no update when candidate release is not newer', async () => {
+    firmwareReleaseService.findLatestActiveRelease.mockResolvedValue({
+      id: 9,
+      version: '1.0.5',
+      artifact_url: 'https://firmware.example.test/esplink.bin',
+      sha256: 'c'.repeat(64),
+      force_update: false,
+    });
+    const { previewOtaDecision } = require('../services/otaCheckService');
+
+    await expect(previewOtaDecision({
+      board_type: 'esplink-v1',
+      firmware_version: '1.0.5',
+    })).resolves.toMatchObject({
+      update_available: false,
+      reason: 'release_not_newer',
+      candidate_release: {
+        id: 9,
+        version: '1.0.5',
+        force: false,
+      },
+    });
+  });
+
   test('returns no update when current firmware is unknown', async () => {
     wechatService.bootRegister.mockResolvedValue({
       device_key: 'device-token',
