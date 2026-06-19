@@ -208,6 +208,43 @@ npm run build
 - 继续完善管理后台设备详情页，把最近 OTA attempt 挂到设备维度。
 - 增加 wrong SHA256 真机负向测试，确认上报 `sha_mismatch` 且设备不切换不可信镜像。
 
+## 2026-06-19 继续开发记录
+
+已完成 OTA 结果上报的真机正向验证：
+
+- 本地数据库已执行 Prisma schema sync，`firmware_ota_attempts` 表可写入。
+- 发布本地 `esplink-v1 / 1.0.5` OTA 记录：
+  - URL：`http://192.168.1.26:8088/firmware/esplink-v1-1.0.5.bin`
+  - SHA256：`56b60bf1bf5b1e391e2476416b40a14565a6b19b38c5c9a537bf3222fbe1f1ed`
+  - 大小：`1266528` bytes
+  - `force_update=false`
+- 真机已从 `1.0.4` 升级到 `1.0.5`，数据库记录 `release_id=5`、`from_version=1.0.4`、`target_version=1.0.5`、`status=success`、`bytes_written=1266528`。
+- 板子当前运行 `fw=1.0.5`，已完成启动注册、WebSocket `hello_ack`，3D cube demo 正常启动。
+- 由于当前设备此前已选中 OTA 分区，重新刷 factory app 后仍会优先从 OTA 分区启动；需要强制重跑完整升级路径时，应先清理 `otadata` 或设置一次更高版本发布。
+- `idf.py flash` 在 `/dev/cu.usbmodem112301` 上偶发串口读取失败，本次使用低速 no-stub `esptool.py write_flash` 完成刷写，Hash verified。
+
+关键数据库记录：
+
+```json
+{
+  "mac_address": "10:51:DB:80:E2:E8",
+  "from_version": "1.0.4",
+  "target_version": "1.0.5",
+  "status": "success",
+  "bytes_written": 1266528,
+  "started_at": "2026-06-19T04:03:35.000Z",
+  "finished_at": "2026-06-19T04:03:45.000Z"
+}
+```
+
+下一步：
+
+- 管理后台设备详情页展示最近 OTA attempt 和 WebSocket 在线状态。
+- 增加 wrong SHA256 真机负向测试，确认固件上报 `sha_mismatch` 且不切换不可信镜像。
+- 增加 interrupted download 真机负向测试，确认固件保持当前有效版本并记录失败原因。
+- 生产签名模式真机回归：`REQUIRE_DEVICE_PSK=true` + `CONFIG_ESPLINK_BOOT_SIGNATURE_REQUIRED=y`。
+- 准备下一版验证固件时，建议使用 `1.0.6`，避免与已验证的 `1.0.5` 发布记录混淆。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路
@@ -396,8 +433,8 @@ API 路径：
 - 生产设备签名：后端已有 `REQUIRE_DEVICE_PSK=true` 校验入口，固件已支持携带 `timestamp`、`nonce`、`signature`；仍需实机验证生产 PSK 配置。
 - HTTPS/WSS：生产环境需要固件证书校验，关闭 HTTP OTA。
 - Repo-local `.env` 流程：已补 `backend/.env.example`，本地验证应从当前仓库复制 `.env` 并填写数据库、Redis、`WS_BASE_URL` 和 `PUBLIC_BASE_URL`。
-- OTA 完整性校验：固件已改为 raw artifact SHA256 校验；仍需真机确认正确 SHA256 接受、错误 SHA256 拒绝。
-- OTA 回滚确认：固件已在启动注册成功后、处理 OTA envelope 前调用 `esp_ota_mark_app_valid_cancel_rollback()`；仍需真机 forced OTA 复测。
+- OTA 完整性校验：正确 SHA256 接受路径已完成真机验证；错误 SHA256 拒绝路径仍需负向验证。
+- OTA 回滚确认：OTA app valid 和 forced OTA 正向路径已完成真机验证；boot fail 后的自动回滚路径仍需负向验证。
 
 ### 建议继续验证
 
