@@ -29,6 +29,11 @@ static bool is_wss_url(const char *url)
     return url && strncmp(url, "wss://", 6) == 0;
 }
 
+static esp_err_t (*crt_bundle_for_url(const char *url))(void *conf)
+{
+    return is_wss_url(url) ? esp_crt_bundle_attach : NULL;
+}
+
 static void ping_task(void *arg)
 {
     (void)arg;
@@ -157,7 +162,7 @@ esp_err_t app_ws_init(const char *url, const char *token,
         .reconnect_timeout_ms = 5000,
         .network_timeout_ms   = 10000,
         .ping_interval_sec    = 30,
-        .crt_bundle_attach    = esp_crt_bundle_attach,
+        .crt_bundle_attach    = crt_bundle_for_url(url),
     };
 
     s_client = esp_websocket_client_init(&cfg);

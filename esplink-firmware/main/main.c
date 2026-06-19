@@ -240,18 +240,19 @@ static esp_http_client_transport_t transport_for_url(const char *url)
     return HTTP_TRANSPORT_OVER_SSL;
 }
 
+static esp_err_t (*crt_bundle_for_url(const char *url))(void *conf)
+{
+    return (url && strncmp(url, "https://", 8) == 0) ? esp_crt_bundle_attach : NULL;
+}
+
 static esp_err_t sync_epoch_time_for_signing(void)
 {
     if (!app_boot_signing_is_configured()) {
         return ESP_OK;
     }
 
-    time_t now = time(NULL);
-    if (now > 1700000000) {
-        return ESP_OK;
-    }
-
     ESP_LOGI(TAG, "syncing time before signed boot register");
+    esp_netif_sntp_deinit();
     esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     esp_err_t err = esp_netif_sntp_init(&config);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
@@ -265,7 +266,7 @@ static esp_err_t sync_epoch_time_for_signing(void)
         return err;
     }
 
-    now = time(NULL);
+    time_t now = time(NULL);
     if (now <= 1700000000) {
         ESP_LOGE(TAG, "SNTP sync produced invalid epoch time: %lld", (long long)now);
         return ESP_ERR_INVALID_STATE;
@@ -340,7 +341,7 @@ static void boot_register_task(void *arg)
         .event_handler  = reg_http_event,
         .method         = HTTP_METHOD_POST,
         .transport_type = transport_for_url(CONFIG_ESPLINK_BOOT_REGISTER_URL),
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .crt_bundle_attach = crt_bundle_for_url(CONFIG_ESPLINK_BOOT_REGISTER_URL),
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     esp_http_client_set_header(client, "Content-Type", "application/json");

@@ -332,6 +332,56 @@ idf.py build
 
 结果：构建通过，`esp32s3_device.bin` 大小 `0x147d30`，OTA 分区剩余 `0x382d0` bytes。当前磁盘空间仍偏低，后续完整重编译前建议先释放空间。
 
+## 2026-06-19 生产签名硬件验证
+
+已在 `/dev/cu.usbmodem112301` 上完成本地生产签名验证，设备 MAC
+`10:51:DB:80:E2:E8`，SN `MAC-1051DB80E2E8`。后端以
+`REQUIRE_DEVICE_PSK=true` 启动，数据库 `production_keys` 使用本地临时 PSK
+哈希，不把明文密钥写入仓库。
+
+验证过程中修复了两个真实硬件问题：
+
+- 签名 boot register 不能只判断当前 epoch 是否大于阈值；板子可能保留过期但数值较大的 RTC 时间，导致后端返回 `device_timestamp_stale`。现在签名前会重新初始化 SNTP 并等待 epoch 同步。
+- ESP-IDF crt bundle 只能在 HTTPS/WSS URL 上挂载；本地 HTTP boot/OTA 验证如果无条件挂载 crt bundle，会触发连接 reset。现在 boot register、OTA download/result、WebSocket 都按 URL scheme 条件启用 crt bundle。
+
+签名 boot register 和 WS 恢复正常：
+
+```text
+main: boot register: mac=10:51:DB:80:E2:E8 sn=MAC-1051DB80E2E8 board=esplink-v1 fw=1.0.5
+main: syncing time before signed boot register
+main: time synced for signed boot register: 1781868778
+main: boot register signature enabled nonce=boot-f9f974f812d09fcf
+main: boot register ok, is_bound=1
+app_ws: WebSocket connected
+main: hello_ack: is_bound=1
+```
+
+签名 OTA result 通过错误 SHA 发布验证。临时发布 `id=6 / version=1.0.6`
+指向已知可下载的 `esplink-v1-1.0.5.bin`，SHA256 设置为全 0。设备上报
+`started` 和 `sha_mismatch` 时均带签名 nonce，后端 `/api/ota/result` 均返回
+HTTP 200：
+
+```text
+app_ota: OTA result signature enabled nonce=boot-d2f997068bc0f161
+app_ota: OTA result reported: started
+app_ota: OTA SHA256 mismatch expected=0000000000000000000000000000000000000000000000000000000000000000 actual=56b60bf1bf5b1e391e2476416b40a14565a6b19b38c5c9a537bf3222fbe1f1ed
+app_ota: restored running partition as boot target after OTA integrity failure
+app_ota: OTA result signature enabled nonce=boot-c9c394b4175e4f65
+app_ota: OTA result reported: sha_mismatch
+```
+
+数据库确认：
+
+```text
+firmware_releases.id=6 is_active=0 force_update=0
+production_keys.last_nonce=boot-7ea63beb64a36283
+firmware_ota_attempts: release_id=6 target_version=1.0.6 status=sha_mismatch error_code=sha_mismatch
+```
+
+板子最终恢复到正常启动路径：`boot register ok`、`app_ws: WebSocket connected`、
+`hello_ack: is_bound=1`。仓库 `sdkconfig` 已恢复为不包含本地 PSK、不强制签名、
+不启用测试自动 WiFi 的默认状态。
+
 ## 已验证主链路
 
 ### 1. 自动联网测试链路

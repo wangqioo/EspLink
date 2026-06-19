@@ -31,6 +31,7 @@ router.post('/ota/check', async (req, res, next) => {
 
     const identity = await deviceIdentityService.verifyBootRequest(req.body);
     if (!identity.allowed) {
+      console.warn(`[DeviceIdentity] ota/check denied mac=${mac} reason=${identity.reason}`);
       return res.status(identity.statusCode || 403).json({ detail: identity.reason });
     }
 
@@ -57,6 +58,7 @@ router.post('/ota/result', async (req, res, next) => {
 
     const identity = await deviceIdentityService.verifyBootRequest(req.body);
     if (!identity.allowed) {
+      console.warn(`[DeviceIdentity] ota/result denied mac=${mac} reason=${identity.reason}`);
       return res.status(identity.statusCode || 403).json({ detail: identity.reason });
     }
 

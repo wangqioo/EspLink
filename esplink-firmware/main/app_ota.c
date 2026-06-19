@@ -63,6 +63,11 @@ static esp_http_client_transport_t transport_for_url(const char *url)
     return is_http_url(url) ? HTTP_TRANSPORT_OVER_TCP : HTTP_TRANSPORT_OVER_SSL;
 }
 
+static esp_err_t (*crt_bundle_for_url(const char *url))(void *conf)
+{
+    return is_https_url(url) ? esp_crt_bundle_attach : NULL;
+}
+
 static const char *default_result_url(void)
 {
     static char url[256];
@@ -360,7 +365,7 @@ static esp_err_t app_ota_report_result(const app_ota_update_t *update,
     esp_http_client_config_t cfg = {
         .url = url,
         .transport_type = transport_for_url(url),
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .crt_bundle_attach = crt_bundle_for_url(url),
         .skip_cert_common_name_check = false,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
@@ -514,7 +519,7 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         .http_config = &(esp_http_client_config_t){
             .url                     = update->url,
             .transport_type          = transport_for_url(update->url),
-            .crt_bundle_attach       = esp_crt_bundle_attach,
+            .crt_bundle_attach       = crt_bundle_for_url(update->url),
             .skip_cert_common_name_check = false,
         },
     };

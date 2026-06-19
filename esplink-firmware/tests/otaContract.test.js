@@ -78,6 +78,7 @@ test('signed boot registration uses epoch time synchronized by SNTP', () => {
   assert.doesNotMatch(signingC, /esp_timer_get_time\s*\(/);
   assert.match(mainC, /#include\s+"esp_netif_sntp\.h"/);
   assert.match(mainC, /sync_epoch_time_for_signing\s*\(/);
+  assert.match(mainC, /esp_netif_sntp_deinit\s*\(\s*\)/);
   assert.match(mainC, /esp_netif_sntp_sync_wait\s*\(/);
   assert.match(mainC, /SNTP sync failed before signed boot register/);
 });
@@ -92,7 +93,7 @@ test('production transport rejects insecure boot register, OTA result, and WebSo
   assert.match(appWsC, /CONFIG_ESPLINK_PRODUCTION_TRANSPORT[\s\S]*production transport requires WSS WebSocket url/);
 });
 
-test('HTTPS and WSS clients attach the ESP-IDF crt bundle', () => {
+test('HTTPS and WSS clients attach the ESP-IDF crt bundle only for TLS URLs', () => {
   const appOtaC = readMain('app_ota.c');
   const appWsC = readMain('app_ws.c');
   const mainC = readMain('main.c');
@@ -101,9 +102,9 @@ test('HTTPS and WSS clients attach the ESP-IDF crt bundle', () => {
   assert.match(appOtaC, /#include\s+"esp_crt_bundle\.h"/);
   assert.match(appWsC, /#include\s+"esp_crt_bundle\.h"/);
   assert.match(mainC, /#include\s+"esp_crt_bundle\.h"/);
-  assert.match(appOtaC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
-  assert.match(appWsC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
-  assert.match(mainC, /crt_bundle_attach\s*=\s*esp_crt_bundle_attach/);
+  assert.match(appOtaC, /crt_bundle_for_url[\s\S]*is_https_url\(url\) \? esp_crt_bundle_attach : NULL/);
+  assert.match(appWsC, /crt_bundle_for_url[\s\S]*is_wss_url\(url\) \? esp_crt_bundle_attach : NULL/);
+  assert.match(mainC, /crt_bundle_for_url[\s\S]*strncmp\(url, "https:\/\/", 8\) == 0\) \? esp_crt_bundle_attach : NULL/);
   assert.match(cmake, /esp-tls/);
 });
 

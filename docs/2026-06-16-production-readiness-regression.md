@@ -74,6 +74,26 @@ Expected backend observation:
 POST /api/ota/check 200
 ```
 
+2026-06-19 hardware result: passed on `/dev/cu.usbmodem112301` with device
+`10:51:DB:80:E2:E8` and backend `REQUIRE_DEVICE_PSK=true`. The firmware used a
+local PSK only for the validation build and sent signed boot registration after
+SNTP epoch synchronization:
+
+```text
+syncing time before signed boot register
+time synced for signed boot register: 1781868778
+boot register signature enabled nonce=boot-
+boot register ok, is_bound=1
+app_ws: WebSocket connected
+hello_ack: is_bound=1
+```
+
+The backend accepted `/api/ota/check` with HTTP 200 and updated the
+`production_keys.last_nonce` / `last_seen_at` fields. Two hardware fixes were
+identified during this run: signed boot must resync SNTP instead of trusting a
+stale RTC epoch, and the ESP-IDF crt bundle must only be attached for
+HTTPS/WSS URLs so local HTTP validation does not reset the connection.
+
 ## 3. Signature Failure Cases
 
 Run one case at a time:
@@ -186,6 +206,20 @@ running partition as boot target, and rebooted back into factory offset
 `0x20000` running `fw=1.0.5`. Backend `firmware_ota_attempts` recorded
 `status=sha_mismatch`; the temporary release was reset to `is_active=0` and
 `force_update=0`.
+
+2026-06-19 signed-result extension: the same wrong-SHA run was repeated with
+backend `REQUIRE_DEVICE_PSK=true` and firmware OTA result signing enabled. Both
+the `started` and terminal `sha_mismatch` reports included a signature nonce
+and the backend accepted `/api/ota/result` with HTTP 200:
+
+```text
+OTA result signature enabled nonce=boot-
+OTA result reported: started
+OTA SHA256 mismatch
+restored running partition as boot target after OTA integrity failure
+OTA result signature enabled nonce=boot-
+OTA result reported: sha_mismatch
+```
 
 ## 6.1 Invalid Firmware Uploads
 
