@@ -41,7 +41,24 @@ async function getDevice(mac) {
     },
   });
   if (!device) return null;
-  return buildDeviceAdminRow(device, { wsConnected: deviceWsManager.isConnected(mac) });
+
+  const latestOtaAttempt = await prisma.firmwareOtaAttempt.findFirst({
+    where: { mac_address: mac },
+    orderBy: { started_at: 'desc' },
+    include: {
+      release: { select: { id: true, version: true, board_type: true } },
+    },
+  });
+
+  return {
+    ...buildDeviceAdminRow(device, { wsConnected: deviceWsManager.isConnected(mac) }),
+    latest_ota_attempt: latestOtaAttempt
+      ? {
+          ...latestOtaAttempt,
+          id: latestOtaAttempt.id.toString(),
+        }
+      : null,
+  };
 }
 
 async function registerDevice({ mac_address, device_id, firmware, name }) {

@@ -4,6 +4,9 @@ jest.mock('../config/database', () => ({
     count: jest.fn(),
     findUnique: jest.fn(),
   },
+  firmwareOtaAttempt: {
+    findFirst: jest.fn(),
+  },
 }));
 
 jest.mock('../ws/deviceWsManager', () => ({
@@ -62,5 +65,46 @@ describe('deviceService admin read model integration', () => {
     prisma.device.findUnique.mockResolvedValue(null);
 
     await expect(getDevice('AA:BB:CC:DD:EE:FF')).resolves.toBeNull();
+  });
+
+  test('getDevice includes the latest OTA attempt for the detail view', async () => {
+    prisma.device.findUnique.mockResolvedValue(makeDevice());
+    prisma.firmwareOtaAttempt.findFirst.mockResolvedValue({
+      id: 12n,
+      mac_address: 'AA:BB:CC:DD:EE:FF',
+      board_type: 'esp32-s3-box',
+      from_version: '1.0.4',
+      target_version: '1.0.5',
+      status: 'success',
+      error_code: null,
+      error_message: null,
+      bytes_written: 1266528,
+      started_at: new Date('2026-06-19T04:03:35.000Z'),
+      finished_at: new Date('2026-06-19T04:03:45.000Z'),
+      release: {
+        id: 5,
+        version: '1.0.5',
+        board_type: 'esplink-v1',
+      },
+    });
+    deviceWsManager.isConnected.mockReturnValue(true);
+
+    const result = await getDevice('AA:BB:CC:DD:EE:FF');
+
+    expect(prisma.firmwareOtaAttempt.findFirst).toHaveBeenCalledWith({
+      where: { mac_address: 'AA:BB:CC:DD:EE:FF' },
+      orderBy: { started_at: 'desc' },
+      include: {
+        release: { select: { id: true, version: true, board_type: true } },
+      },
+    });
+    expect(result.latest_ota_attempt).toMatchObject({
+      id: '12',
+      status: 'success',
+      from_version: '1.0.4',
+      target_version: '1.0.5',
+      bytes_written: 1266528,
+      release: { id: 5, version: '1.0.5', board_type: 'esplink-v1' },
+    });
   });
 });

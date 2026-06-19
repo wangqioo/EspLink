@@ -59,3 +59,17 @@ test('OTA upgrade reports lifecycle results back to the backend', () => {
   assert.match(appOtaC, /HTTP_METHOD_POST/);
   assert.match(appOtaC, /\/api\/ota\/result/);
 });
+
+test('OTA SHA256 failure restores the current running partition before returning', () => {
+  const appOtaC = readMain('app_ota.c');
+  const mismatchIndex = appOtaC.indexOf('"sha_mismatch"');
+  const restoreIndex = appOtaC.indexOf('esp_ota_set_boot_partition');
+  const restartIndex = appOtaC.indexOf('esp_restart()');
+
+  assert.notEqual(mismatchIndex, -1);
+  assert.notEqual(restoreIndex, -1);
+  assert.ok(restoreIndex < mismatchIndex);
+  assert.ok(mismatchIndex < restartIndex);
+  assert.match(appOtaC, /esp_ota_get_running_partition\s*\(/);
+  assert.match(appOtaC, /esp_ota_set_boot_partition\s*\(\s*running\s*\)/);
+});

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Button, Space, Popconfirm, message, Tag, Badge, Typography, Select, Input, Tooltip, Modal, Form } from 'antd';
-import { ReloadOutlined, DisconnectOutlined, LinkOutlined } from '@ant-design/icons';
-import { getDevices, kickDevice, unbindDevice, assignDeviceKey, getKeys } from '../../api';
+import { Table, Button, Space, Popconfirm, message, Tag, Badge, Typography, Select, Input, Tooltip, Modal, Descriptions, Drawer, Empty } from 'antd';
+import { ReloadOutlined, DisconnectOutlined, LinkOutlined, EyeOutlined } from '@ant-design/icons';
+import { getDevices, getDevice, kickDevice, unbindDevice, assignDeviceKey, getKeys } from '../../api';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
@@ -88,6 +88,31 @@ function renderCapabilities(record) {
   );
 }
 
+function renderOtaStatus(attempt) {
+  if (!attempt) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 OTA 记录" />;
+
+  const color = {
+    success: 'green',
+    started: 'processing',
+    downloading: 'processing',
+    download_failed: 'red',
+    sha_mismatch: 'red',
+    failed: 'red',
+  }[attempt.status] || 'default';
+
+  return (
+    <Descriptions size="small" bordered column={1}>
+      <Descriptions.Item label="状态"><Tag color={color}>{attempt.status}</Tag></Descriptions.Item>
+      <Descriptions.Item label="版本">{attempt.from_version || '—'} → {attempt.target_version || '—'}</Descriptions.Item>
+      <Descriptions.Item label="发布">{attempt.release ? `${attempt.release.board_type} / ${attempt.release.version} (#${attempt.release.id})` : '—'}</Descriptions.Item>
+      <Descriptions.Item label="写入字节">{typeof attempt.bytes_written === 'number' ? attempt.bytes_written.toLocaleString() : '—'}</Descriptions.Item>
+      <Descriptions.Item label="开始">{attempt.started_at ? dayjs(attempt.started_at).format('YYYY-MM-DD HH:mm:ss') : '—'}</Descriptions.Item>
+      <Descriptions.Item label="结束">{attempt.finished_at ? dayjs(attempt.finished_at).format('YYYY-MM-DD HH:mm:ss') : '—'}</Descriptions.Item>
+      <Descriptions.Item label="错误">{attempt.error_code || attempt.error_message ? `${attempt.error_code || ''} ${attempt.error_message || ''}`.trim() : '—'}</Descriptions.Item>
+    </Descriptions>
+  );
+}
+
 export default function Devices() {
   const [data, setData] = useState([]);
   const [total, setTotal] = useState(0);
@@ -98,6 +123,9 @@ export default function Devices() {
   const [keys, setKeys] = useState([]);
   const [selectedKey, setSelectedKey] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,6 +151,19 @@ export default function Devices() {
     setAssignModal(mac);
     setSelectedKey(null);
     getKeys({ pageSize: 100, isActive: 'true' }).then((res) => setKeys(res.data.list));
+  }
+
+  async function openDetail(mac) {
+    setDetailOpen(true);
+    setDetailLoading(true);
+    try {
+      const res = await getDevice(mac);
+      setDetail(res.data);
+    } catch (err) {
+      message.error(err?.message || '加载设备详情失败');
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   async function doAssign() {
@@ -210,9 +251,10 @@ export default function Devices() {
     {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: 280,
       render: (_, record) => (
         <Space>
+          <Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record.mac_address)}>详情</Button>
           <Button size="small" icon={<LinkOutlined />} onClick={() => openAssign(record.mac_address)}>分配Key</Button>
           <Popconfirm title="确认强制下线？" onConfirm={() => doKick(record.mac_address)}>
             <Button size="small" icon={<DisconnectOutlined />}>下线</Button>
@@ -267,8 +309,41 @@ export default function Devices() {
         dataSource={data}
         loading={loading}
         scroll={{ x: 1200 }}
+        onRow={(record) => ({ onDoubleClick: () => openDetail(record.mac_address) })}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage, showTotal: (t) => `共 ${t} 台设备` }}
       />
+
+      <Drawer
+        title="设备详情"
+        width={560}
+        open={detailOpen}
+        loading={detailLoading}
+        onClose={() => setDetailOpen(false)}
+      >
+        {detail ? (
+          <Space direction="vertical" size={18} style={{ width: '100%' }}>
+            <Descriptions size="small" bordered column={1}>
+              <Descriptions.Item label="MAC"><code>{detail.mac_address}</code></Descriptions.Item>
+              <Descriptions.Item label="在线">{renderOnlineStatus(detail)}</Descriptions.Item>
+              <Descriptions.Item label="设备名">{detail.name || '未命名'}</Descriptions.Item>
+              <Descriptions.Item label="设备 ID">{detail.device_id || '—'}</Descriptions.Item>
+              <Descriptions.Item label="板型">{detail.board_type ? <Tag>{detail.board_type}</Tag> : '—'}</Descriptions.Item>
+              <Descriptions.Item label="固件">{detail.firmware || '—'}</Descriptions.Item>
+              <Descriptions.Item label="最后在线">{detail.last_seen ? dayjs(detail.last_seen).format('YYYY-MM-DD HH:mm:ss') : '—'}</Descriptions.Item>
+              <Descriptions.Item label="配对">{detail.is_paired ? <Tag color="green">已配对</Tag> : <Tag color="orange">未配对</Tag>}</Descriptions.Item>
+              <Descriptions.Item label="绑定 Key">{detail.api_key ? `${detail.api_key.name || detail.api_key.id} (${detail.api_key.is_active ? 'active' : 'inactive'})` : '—'}</Descriptions.Item>
+              <Descriptions.Item label="租户">{detail.tenant?.name || '—'}</Descriptions.Item>
+              <Descriptions.Item label="能力">{renderCapabilities(detail)}</Descriptions.Item>
+            </Descriptions>
+            <div>
+              <Typography.Title level={5}>最近 OTA</Typography.Title>
+              {renderOtaStatus(detail.latest_ota_attempt)}
+            </div>
+          </Space>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择设备" />
+        )}
+      </Drawer>
 
       <Modal
         title="为设备分配 API Key"

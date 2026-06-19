@@ -249,6 +249,24 @@ static void log_update_metadata(const app_ota_update_t *update)
     }
 }
 
+static void restore_running_partition_for_failed_ota(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) {
+        ESP_LOGE(TAG, "unable to locate running partition after OTA integrity failure");
+        return;
+    }
+
+    esp_err_t err = esp_ota_set_boot_partition(running);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "failed to restore running partition as boot target: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+
+    ESP_LOGW(TAG, "restored running partition as boot target after OTA integrity failure");
+}
+
 static esp_err_t app_ota_report_result(const app_ota_update_t *update,
                                        const char *status,
                                        const char *error_code,
@@ -473,6 +491,7 @@ esp_err_t app_ota_upgrade(const app_ota_update_t *update)
         err = verify_boot_partition_artifact_sha256(update->sha256, update->size_bytes);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "OTA integrity verification failed: %s", esp_err_to_name(err));
+            restore_running_partition_for_failed_ota();
             app_ota_report_result(update, "sha_mismatch", "sha_mismatch", esp_err_to_name(err));
             return err;
         }

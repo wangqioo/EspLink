@@ -239,11 +239,42 @@ npm run build
 
 下一步：
 
-- 管理后台设备详情页展示最近 OTA attempt 和 WebSocket 在线状态。
-- 增加 wrong SHA256 真机负向测试，确认固件上报 `sha_mismatch` 且不切换不可信镜像。
+- 管理后台设备详情页展示最近 OTA attempt 和 WebSocket 在线状态。（已完成基础详情抽屉和后端字段）
+- 增加 wrong SHA256 真机负向测试，确认固件上报 `sha_mismatch` 且不切换不可信镜像。（已完成固件恢复 boot target 保护，待真机复测）
 - 增加 interrupted download 真机负向测试，确认固件保持当前有效版本并记录失败原因。
 - 生产签名模式真机回归：`REQUIRE_DEVICE_PSK=true` + `CONFIG_ESPLINK_BOOT_SIGNATURE_REQUIRED=y`。
 - 准备下一版验证固件时，建议使用 `1.0.6`，避免与已验证的 `1.0.5` 发布记录混淆。
+
+## 2026-06-19 后续继续开发记录
+
+已完成：
+
+- 管理后台设备页新增详情抽屉：可查看在线来源、基础信息、能力摘要和最近 OTA attempt。
+- 后端 `GET /api/v1/devices/:mac` 现在返回 `latest_ota_attempt`，包含最近状态、版本、发布记录、写入字节和失败原因。
+- 固件 wrong SHA256 保护增强：`esp_https_ota()` 下载完成但 raw artifact SHA256 校验失败时，先调用 `esp_ota_set_boot_partition(running)` 恢复当前运行分区为 boot target，再上报 `sha_mismatch`，避免下次重启进入未信任镜像。
+- 更新 production readiness runbook 的 wrong SHA256 预期日志和结果。
+
+已验证：
+
+```bash
+cd backend
+npm test -- deviceServiceAdminReadModel.test.js deviceAdminReadModel.test.js --runInBand
+```
+
+结果：2 个 suite、9 个测试全部通过。
+
+```bash
+node --test esplink-firmware/tests/otaContract.test.js
+```
+
+结果：6 个固件契约测试全部通过。
+
+```bash
+cd backend/admin-frontend
+npm run build
+```
+
+结果：构建通过；Vite 仍提示主 chunk 超过 500 KB，这是当前后台已有体积问题。
 
 ## 已验证主链路
 

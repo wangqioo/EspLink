@@ -165,14 +165,18 @@ Expected serial observations:
 ```text
 OTA SHA256 mismatch
 OTA integrity verification failed
-fatal error, restarting in 5s
+restored running partition as boot target after OTA integrity failure
+OTA result reported: sha_mismatch
 ```
 
-Expected outcome: device does not boot the untrusted image.
+Expected outcome: device does not reboot into the untrusted image. The backend
+records `status=sha_mismatch`, and the next boot stays on the previously running
+valid firmware.
 
 Before this case can be trusted, the normal OTA case must first pass with a
 correct backend artifact SHA256. As of `1.0.4`, correct raw artifact SHA256 is
-accepted on hardware; wrong SHA256 remains a pending negative hardware case.
+accepted on hardware. As of `1.0.5`, firmware also restores the current running
+partition as the boot target when raw artifact SHA256 verification fails.
 
 ## 6.1 Invalid Firmware Uploads
 
