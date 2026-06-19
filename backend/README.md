@@ -255,10 +255,9 @@ main: hello_ack: is_bound=1
 
 完整状态见：[开发状态与实机验证记录](../docs/2026-06-16-development-status.md) 和 [Production Readiness Regression Runbook](../docs/2026-06-16-production-readiness-regression.md)。
 
-仍需硬件或部署环境验证：
+已完成的硬件验证还包括 boot-fail OTA 自动回滚和后端重启后的
+WebSocket 恢复。仍需部署环境验证：
 
-- boot-fail OTA 自动回滚；
-- 后端重启后的 WebSocket 恢复；
 - HTTPS/WSS 真域名证书链路。
 
 ---

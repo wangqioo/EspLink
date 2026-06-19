@@ -228,7 +228,7 @@ type = (subtype << 2) | frameType
 | SSID 自动填充 | 已接入，待微信开发者工具和 iOS 真机复测 | 进入配网填写页后自动读取当前 WiFi SSID；读取失败或未授权时静默保留手动输入 |
 | 生产设备签名 | 已接入并完成本地硬件验证 | 固件 `/api/ota/check` 和 `/api/ota/result` 均支持 `timestamp/nonce/signature` HMAC-SHA256 |
 | OTA SHA256 严格校验 | 已接入并完成 wrong SHA 真机验证 | 固件按后端 artifact 原始 bytes SHA256 校验，不匹配则拒绝重启并恢复当前运行分区 |
-| Boot-fail OTA 自动回滚 | 待硬件负向验证 | 需发布一个下载和 SHA 校验都通过、但启动失败的测试镜像，确认 bootloader 回滚 |
+| Boot-fail OTA 自动回滚 | 已完成真机验证 | 2026-06-20 使用临时 `1.0.8` 崩溃镜像验证 bootloader 回滚到 `1.0.5` |
 | HTTPS/WSS 真域名链路 | 待部署环境 | 需要真实域名、证书和反向代理；本地 HTTP 环境不能验证 |
 
 ---
@@ -262,8 +262,8 @@ type = (subtype << 2) | frameType
 - [x] provision 页面输入框渲染 bug 修复（待微信开发者工具和 iOS 真机复测）
 - [x] SSID 自动填充（待微信开发者工具和 iOS 真机复测）
 - [x] 多设备管理（小程序端支持已绑定设备列表）
-- [ ] Boot-fail OTA 自动回滚硬件验证
-- [ ] 后端重启 / WebSocket 恢复硬件验证
+- [x] Boot-fail OTA 自动回滚硬件验证
+- [x] 后端重启 / WebSocket 恢复硬件验证
 - [ ] HTTPS/WSS 真域名证书环境验证
 - [ ] 配网二维码快速模式（无需蓝牙扫描）
 

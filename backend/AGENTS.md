@@ -110,8 +110,8 @@ BLE flows still require WeChat DevTools real-device testing; the simulator does 
 
 ## Remaining Non-Code Validation
 
-As of 2026-06-20, the ordinary code/documentation closure is complete. Remaining items are hardware/deployment-gated:
+As of 2026-06-20, the ordinary code/documentation closure is complete. Hardware validation has covered signed boot/result reporting, OTA SHA checks, interrupted download recovery, boot-fail OTA rollback, and backend restart/WebSocket recovery. Remaining items are deployment- or tool-gated:
 
-- boot-fail OTA automatic rollback;
-- backend restart and WebSocket recovery;
-- real-domain HTTPS/WSS certificate validation.
+- real-domain HTTPS/WSS certificate validation;
+- WeChat DevTools and iOS real-device retest for mini program BLE/provisioning UI;
+- longer router-disconnect and online stability observation windows.
