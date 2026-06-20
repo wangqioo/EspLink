@@ -1,6 +1,8 @@
 # EspLink 平台架构设计
 
 > 多产品 ESP32 IoT 平台 — 固件框架 · 云平台 · 微信小程序
+>
+> 最新更新：2026-06-20。本文已按当前仓库实现收口：固件当前是 ESP-IDF C 代码基座，后端是 `backend/` 下的 Node/Express，管理后台是 React/Vite，微信小程序是原生小程序。历史 C++ Board 抽象仍可作为后续多产品扩展方向，但不是当前已落地代码结构。
 
 ---
 
@@ -39,32 +41,34 @@ EspLink 是一套面向多款 ESP32 产品的通用 IoT 平台，解决三个核
 ```
 esplink-firmware/
 ├── main/
-│   ├── application.cc/.h       # 应用单例，事件循环，状态机
-│   ├── main.cc                 # 入口
-│   ├── device_state.h          # 状态枚举
-│   ├── ota.cc/.h               # OTA + 启动引导
-│   ├── settings.cc/.h          # NVS 持久化配置
-│   ├── system_info.cc/.h       # 设备身份（MAC/UUID）
-│   ├── protocols/
-│   │   └── protocol.h          # 抽象协议基类
-│   │   └── websocket_protocol.cc/.h
-│   ├── boards/
-│   │   ├── common/
-│   │   │   ├── board.h         # Board 抽象基类
-│   │   │   ├── blufi.cc/.h     # BLE 配网（共用）
-│   │   │   ├── button.cc/.h
-│   │   │   └── network/        # WiFi 连接管理
-│   │   ├── product_a/          # 产品 A 实现
-│   │   │   └── product_a.cc
-│   │   └── product_b/          # 产品 B 实现
-│   │       └── product_b.cc
-│   └── pages/                  # UI 页面注册（有屏设备）
+│   ├── main.c                  # 入口和主状态机
+│   ├── board_config.h          # board_type、ui_page、firmware_version、capabilities
+│   ├── app_blufi.c/.h          # BLE BluFi 配网
+│   ├── app_wifi.c/.h           # WiFi 连接和重试
+│   ├── app_nvs.c/.h            # WiFi/token/ws_url/SN 持久化
+│   ├── app_device.c/.h         # MAC/SN/BLE 名称/固件版本
+│   ├── app_boot_signing.c/.h   # 启动注册和 OTA result HMAC 签名
+│   ├── app_ota.c/.h            # OTA 下载、SHA256 校验、结果上报、回滚协作
+│   ├── app_ws.c/.h             # WebSocket hello/ping/command/config/ota_push
+│   ├── app_button.c/.h         # BOOT 长按 5 秒恢复出厂
+│   ├── app_cube_demo.c/.h      # 当前示例产品模块
+│   ├── esp32_s3_szp.c/.h       # LCD/QMI8658 BSP
+│   └── local_wifi_config.example.h
 ├── CMakeLists.txt
 ├── partitions.csv
 └── sdkconfig.defaults
 ```
 
 ### 2.2 Board 抽象（核心）
+
+当前已落地的多产品契约先由 `board_config.h` 承载：`BOARD_TYPE`、`BOARD_UI_PAGE`、`BOARD_FIRMWARE_VERSION` 和 `BOARD_CAPABILITIES_JSON` 会在启动注册、WebSocket hello 和 OTA 决策中贯穿。这样第一款产品不需要引入 C++ Board 层也能完成上云、绑定和 OTA。
+
+后续接入第二款以上产品时，可以在两条路线里二选一：
+
+- 继续 C 基座：用 `board_config.h` + C 函数表抽象产品能力，改动小，适合快速接入相近硬件。
+- 迁移 C++ Board：参考下面的 Board 类草案，适合多款硬件差异较大、需要显示/电源/传感器统一接口的阶段。
+
+以下 C++ Board 抽象是后续扩展方向，不是当前代码现状。
 
 每款产品是一个 `Board` 子类，框架层完全不感知具体硬件。
 
@@ -372,7 +376,7 @@ onLoad({ deviceId }) {
 
 | 层 | 推荐 | 说明 |
 |----|------|------|
-| 固件 | ESP-IDF 5.x · C/C++ | 现有基础，继续沿用 |
+| 固件 | ESP-IDF 5.x · C | 当前正式固件为 C；C++ Board 抽象留作多产品扩展方向 |
 | 后端 API | Node.js + Express | 当前正式后端，位于 `backend/` |
 | WebSocket 网关 | Node.js + ws | 与设备长连接、hello/ping/OTA push 同进程管理 |
 | 数据库 | Prisma + MySQL | 当前 schema datasource 为 MySQL，Redis 用于在线状态、限流和缓存 |
@@ -406,10 +410,10 @@ onLoad({ deviceId }) {
 - `app_ws.c` 的 `send_hello()` 已发送 board、firmware、capabilities 等设备元信息
 - `app_ota.c` 已接入启动注册响应中的 OTA envelope，并向 `/api/ota/result` 上报结果
 
-**固件语言问题（重要决策）**：
-- 现有代码是纯 **C**（ESP-IDF 风格），xiaozhi/zectrix 的 Board 抽象是 **C++**
-- Phase 2 需决定：迁移到 C++ 以复用 Board 类模式，还是用 C 函数指针结构体实现等价抽象
-- **建议**：迁移到 C++，长期收益更大，且 ESP-IDF 5.x 完整支持 C++
+**固件语言决策（当前）**：
+- 现有代码是纯 **C**（ESP-IDF 风格），已经完成配网、上云、OTA、签名和回滚验证。
+- 当前不为第一款产品做 C++ 迁移，避免在已验证链路上引入结构性风险。
+- 第二款产品接入时再评估：若硬件差异小，优先用 C 函数表扩展；若显示、电源、传感器抽象明显变复杂，再迁移到 C++ Board 模式。
 
 ### 小程序（esplink-app）
 

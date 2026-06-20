@@ -1,6 +1,61 @@
 # 项目启动指南
 
-## 本机 Windows 开发环境（当前配置，2026-05-06）
+> 最新更新：2026-06-20。当前正式仓库是 `/Users/wq/EspLink`，后端位于 `/Users/wq/EspLink/backend`。下面先给出当前 Mac/仓库启动方式；原 Windows/Scoop 片段仅作为历史环境参考，不应作为当前开发默认路径。
+
+## 当前 Mac / EspLink 仓库启动方式
+
+### 后端
+
+```bash
+cd /Users/wq/EspLink/backend
+cp .env.example .env
+# 编辑 .env：DATABASE_URL、REDIS_HOST、JWT_SECRET、ADMIN_PASSWORD、WS_BASE_URL、PUBLIC_BASE_URL
+npm install
+npm run db:generate
+npm test -- --runInBand
+npm start
+```
+
+硬件联调时，`WS_BASE_URL` 和 `PUBLIC_BASE_URL` 必须使用 ESP32 能访问到的局域网地址，例如：
+
+```env
+WS_BASE_URL=ws://192.168.1.26:8088/ws/device
+PUBLIC_BASE_URL=http://192.168.1.26:8088
+```
+
+### 管理后台
+
+```bash
+cd /Users/wq/EspLink/backend/admin-frontend
+npm install
+npm run build
+npm run dev
+```
+
+### 固件
+
+```bash
+cd /Users/wq/EspLink/esplink-firmware
+source /Users/wq/esp-idf/export.sh
+idf.py build
+idf.py -p /dev/cu.usbmodem112301 flash monitor
+```
+
+当前固件配置集中在 Kconfig 和 `main/board_config.h`。启动注册 URL、生产传输强制、签名开关和测试 WiFi 注入都不要绑定到 `main.c` 行号。
+
+### 当前验证状态
+
+截至 2026-06-20，普通 OTA、同版本强制 OTA、wrong SHA 拒绝、下载中断恢复、boot-fail 回滚、签名启动注册、签名 OTA result、后端重启/WebSocket 恢复均已通过真机验证。剩余项是 HTTPS/WSS 真域名证书链路、微信开发者工具/iOS 真机复测和长时间稳定性观察。
+
+最新状态以根目录文档为准：
+
+- `../docs/2026-06-16-development-status.md`
+- `../docs/2026-06-16-production-readiness-regression.md`
+- `../docs/2026-06-19-production-security-design.md`
+
+---
+
+## 历史 Windows 开发环境（2026-05-06 快照）
 
 MySQL 和 Redis 通过 **Scoop** 安装在本机，无需 Docker。每次重启电脑后需手动重启服务：
 
@@ -229,10 +284,7 @@ WS_BASE_URL=ws://192.168.1.100:8088
 ```
 重启后端后，固件调用 `/api/ota/check` 拿到的 `websocket_url` 自动变为局域网地址。
 
-**固件侧配置（EspLink 固件 `main.c`）：**
-```c
-#define BOOT_REGISTER_URL "http://192.168.1.100:8088/api/ota/check"
-```
+**固件侧配置：** 当前固件通过 Kconfig 配置 boot register URL，不再依赖 `main.c` 行号。使用 `idf.py menuconfig` 设置 `EspLink → Boot register URL`，本地开发填 `http://局域网IP:8088/api/ota/check`。
 
 连接成功后，在管理后台**设备管理**页面应看到对应 MAC 地址的设备上线（绿色状态）。
 
@@ -301,7 +353,10 @@ server {
 生产环境 `.env` 关键配置：
 ```env
 NODE_ENV=production
-WS_BASE_URL=wss://your-domain.com   # 或 ws://<your-public-host>:8088（无域名时）
+REQUIRE_DEVICE_PSK=true
+PUBLIC_BASE_URL=https://your-domain.com
+FIRMWARE_PUBLIC_BASE_URL=https://your-domain.com
+WS_BASE_URL=wss://your-domain.com/ws/device
 CORS_ORIGIN=https://your-admin-domain.com
 ```
 
@@ -353,7 +408,7 @@ Redis 断线时限流和 Key 缓存会自动降级（放行请求），不影响
 确认小程序里的 `BASE_URL` 已改为实际后端地址（开发：`http://局域网IP:8088`，生产：`https://your-domain.com`）。微信开发者工具需在「详情 → 本地设置」中勾选「不校验合法域名」。
 
 **Q: 固件调用 `/api/ota/check` 失败**
-固件的 `BOOT_REGISTER_URL`（`main.c` 第27行）需改为后端实际地址。开发环境无法用 `localhost`，需用电脑局域网 IP（如 `http://192.168.x.x:8088/api/ota/check`），生产用域名。
+固件的 boot register URL 需配置为后端实际地址。开发环境无法用 `localhost`，需用电脑局域网 IP（如 `http://192.168.x.x:8088/api/ota/check`），生产用 HTTPS 域名。当前固件通过 Kconfig 管理该 URL。
 如果后端开启了 `REQUIRE_DEVICE_PSK=true`，还要确认已执行 `db/migrations/2026-06-15-create-production-keys.sql`，并且该设备在 `production_keys` 中有可用密钥；固件请求需带 `sn`、`timestamp`、`nonce` 和 HMAC `signature`。
 如果返回 `429`，说明触发了上电注册限流，检查 `OTA_CHECK_RATE_LIMIT` 和 `OTA_CHECK_RATE_WINDOW_SECONDS`。
 
