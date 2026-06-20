@@ -44,6 +44,7 @@
 
 - 回归步骤和真机证据：[Production Readiness Regression Runbook](./2026-06-16-production-readiness-regression.md)
 - 生产安全策略：[Production Security Design](./2026-06-19-production-security-design.md)
+- 后续上线验收和产品迭代清单：[Production Completion Implementation Plan](./superpowers/plans/2026-06-19-production-completion.md)
 - 历史本地联调：[2026-06-13 本地联调记录与后续计划](./2026-06-13-local-integration.md)
 
 ## 当前项目边界
@@ -670,6 +671,7 @@ API 路径：
 - HTTPS/WSS：生产环境传输强制和 crt bundle 接入已完成代码准备；仍需使用真实 HTTPS/WSS 域名做真机验证。
 - 生产 `.env`：`NODE_ENV=production`、`REQUIRE_DEVICE_PSK=true`、`WS_BASE_URL=wss://...`、`PUBLIC_BASE_URL=https://...`、`FIRMWARE_PUBLIC_BASE_URL=https://...` 必须与真实域名一致。
 - 小程序发布前复测：BLE/配网页面、SSID 自动填充、失败重试和绑定流程需用微信开发者工具 + iOS 真机确认。
+- 详细执行清单已记录在 [Production Completion Implementation Plan](./superpowers/plans/2026-06-19-production-completion.md) 的 `Follow-Up Plan: Production Acceptance And Next Iteration`。
 
 ### 建议继续观察
 

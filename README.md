@@ -8,6 +8,8 @@
 
 生产安全策略见：[2026-06-19 Production Security Design](./docs/2026-06-19-production-security-design.md)。
 
+后续上线验收和产品迭代清单见：[Production Completion Implementation Plan](./docs/superpowers/plans/2026-06-19-production-completion.md)。
+
 历史本地联调记录见：[2026-06-13 本地联调记录与后续计划](./docs/2026-06-13-local-integration.md)。
 
 ```

@@ -77,3 +77,51 @@
 - [x] Build firmware with default development settings.
 - [x] Confirm `git status --short` has no secret/config artifacts.
 - [x] Commit and push to `origin/main`.
+
+## Follow-Up Plan: Production Acceptance And Next Iteration
+
+The MVP development plan is closed. The remaining work is not ordinary feature
+implementation; it is production acceptance, release preparation, and optional
+product expansion.
+
+### Production Acceptance Gates
+
+- [ ] HTTPS/WSS true-domain validation:
+  - provision a real domain, certificate, and reverse proxy;
+  - set `NODE_ENV=production`;
+  - set `PUBLIC_BASE_URL=https://...`;
+  - set `FIRMWARE_PUBLIC_BASE_URL=https://...`;
+  - set `WS_BASE_URL=wss://.../ws/device`;
+  - flash a production-transport firmware build;
+  - verify signed boot registration, OTA check/result, firmware download, and WebSocket over HTTPS/WSS.
+- [ ] Per-device PSK manufacturing flow:
+  - define the manufacturing input file format: MAC, SN, board type, PSK;
+  - write or choose the NVS/factory partition injection tool;
+  - insert matching `production_keys` rows before device shipment;
+  - verify one device can register with the injected PSK and fails after key deactivation;
+  - document emergency revoke and replacement procedure.
+- [ ] WeChat mini program real-device release check:
+  - configure production `BASE_URL` and legal request/socket domains in WeChat platform;
+  - run WeChat DevTools preview;
+  - retest BLE scan, BluFi provisioning, SSID auto-fill, failure retry, lookup, bind, and device list on iOS;
+  - repeat Android if target users include Android devices.
+- [ ] Long-running stability window:
+  - run the board online for at least one workday;
+  - include router disconnect/reconnect, backend restart, Redis restart if possible, and weak-network observation;
+  - record WebSocket reconnect timing, backend online/offline state, and heartbeat recovery.
+- [ ] Release candidate checklist:
+  - rerun backend tests;
+  - rerun admin frontend build;
+  - rerun mini program static tests;
+  - rerun default firmware build;
+  - rerun production-signing firmware build;
+  - confirm no `.env`, `backend/uploads`, `local_wifi_config.h`, PSK, WiFi password, database password, or JWT secret is staged.
+
+### Optional Product Iteration Backlog
+
+- [ ] QR-code quick provisioning path for cases where BLE scanning is slow or unavailable.
+- [ ] Phone-side push notifications for device offline alerts and OTA completion.
+- [ ] Multi-chip support beyond ESP32-S3, with explicit partition/OTA compatibility checks.
+- [ ] Remote diagnostics and log upload for field support.
+- [ ] Second ESP32 product integration to validate the multi-product `board_type` and `ui_page` model.
+- [ ] Device key rotation automation after a trusted maintenance channel exists.
